@@ -1,0 +1,41 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Large Datasets (PaySim raw dataset ~493MB exceeds GitHub limit)
+dataset/paysim.csv
+dataset/*.csv
+!dataset/.gitkeep
+
+# Environment variables & credentials
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Virtual environments
+venv/
+.venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# Pytest / coverage artifacts
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.cache
+
+# Logs & temp files
+*.log
+logs/
+*.tmp
+
+# Operating system & editor files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
