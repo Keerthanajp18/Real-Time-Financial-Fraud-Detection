@@ -1,6 +1,11 @@
+from pyspark.ml.classification import LogisticRegression
 from pyspark.sql import SparkSession
 from pyspark.ml import Pipeline
 from pyspark.ml.feature import StringIndexer, OneHotEncoder, VectorAssembler
+from pyspark.ml.evaluation import (
+    BinaryClassificationEvaluator,
+    MulticlassClassificationEvaluator,
+)
 
 GOLD_DATA_PATH = "data/gold/enriched_transactions"
 
@@ -74,6 +79,87 @@ def main():
 
     train_df = pipeline_model.transform(train_raw_df)
     test_df = pipeline_model.transform(test_raw_df)
+
+    print("\nTraining Logistic Regression baseline...")
+
+    lr = LogisticRegression(
+        featuresCol="features",
+        labelCol=LABEL_COLUMN,
+        maxIter=20
+    )
+
+    lr_model = lr.fit(train_df)
+
+    predictions = lr_model.transform(test_df)
+
+    confusion_rows = (
+        predictions
+        .groupBy(LABEL_COLUMN, "prediction")
+        .count()
+        .collect()
+    )
+
+    confusion = {
+        (int(row[LABEL_COLUMN]), int(row["prediction"])): row["count"]
+        for row in confusion_rows
+    }
+
+    tn = confusion.get((0, 0), 0)
+    fp = confusion.get((0, 1), 0)
+    fn = confusion.get((1, 0), 0)
+    tp = confusion.get((1, 1), 0)
+
+    precision = tp / (tp + fp) if (tp + fp) else 0.0
+    recall = tp / (tp + fn) if (tp + fn) else 0.0
+    fraud_f1 = (
+        2 * precision * recall / (precision + recall)
+        if (precision + recall)
+        else 0.0
+    )
+
+    accuracy = (tp + tn) / (tp + tn + fp + fn)
+
+    pr_evaluator = BinaryClassificationEvaluator(
+    labelCol=LABEL_COLUMN,
+    rawPredictionCol="rawPrediction",
+    metricName="areaUnderPR"
+    )
+
+    roc_evaluator = BinaryClassificationEvaluator(
+        labelCol=LABEL_COLUMN,
+        rawPredictionCol="rawPrediction",
+        metricName="areaUnderROC"
+    )
+
+    f1_evaluator = MulticlassClassificationEvaluator(
+        labelCol=LABEL_COLUMN,
+        predictionCol="prediction",
+        metricName="f1"
+    )
+
+    pr_auc = pr_evaluator.evaluate(predictions)
+    roc_auc = roc_evaluator.evaluate(predictions)
+    f1_score = f1_evaluator.evaluate(predictions)
+
+    print("\nLogistic Regression Evaluation:")
+    print(f"PR-AUC:          {pr_auc:.4f}")
+    print(f"ROC-AUC:         {roc_auc:.4f}")
+    print(f"Fraud Precision: {precision:.4f}")
+    print(f"Fraud Recall:    {recall:.4f}")
+    print(f"Fraud F1:        {fraud_f1:.4f}")
+    print(f"Accuracy:        {accuracy:.4f}")
+
+    print("\nPrediction distribution:")
+    predictions.groupBy("prediction").count().show()
+
+    print("\nConfusion matrix:")
+    predictions.groupBy(
+        LABEL_COLUMN,
+        "prediction"
+    ).count().orderBy(
+        LABEL_COLUMN,
+        "prediction"
+    ).show()
 
     print("\nTraining set label distribution:")
     train_df.groupBy(LABEL_COLUMN).count().show()
