@@ -65,11 +65,24 @@ def main():
         ]
     )
 
-    pipeline_model = pipeline.fit(df)
-    ml_df = pipeline_model.transform(df)
+    train_raw_df, test_raw_df = df.randomSplit(
+    [0.8, 0.2],
+    seed=42
+    )
 
-    print("\nML-ready dataset:")
-    ml_df.select(
+    pipeline_model = pipeline.fit(train_raw_df)
+
+    train_df = pipeline_model.transform(train_raw_df)
+    test_df = pipeline_model.transform(test_raw_df)
+
+    print("\nTraining set label distribution:")
+    train_df.groupBy(LABEL_COLUMN).count().show()
+
+    print("\nTest set label distribution:")
+    test_df.groupBy(LABEL_COLUMN).count().show()
+    
+    print("\nML-ready training sample:")
+    train_df.select(
         "transaction_id",
         "type",
         "type_index",
@@ -77,7 +90,7 @@ def main():
         "features",
         "isFraud"
     ).show(5, truncate=False)
-
+    
     print(f"\nTotal records: {df.count()}")
 
     print("\nTarget column:")
