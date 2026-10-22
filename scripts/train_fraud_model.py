@@ -1,4 +1,4 @@
-from pyspark.ml.classification import LogisticRegression
+from pyspark.ml.classification import LogisticRegression, RandomForestClassifier
 from pyspark.sql import SparkSession
 from pyspark.ml import Pipeline
 from pyspark.ml.feature import StringIndexer, OneHotEncoder, VectorAssembler
@@ -154,6 +154,90 @@ def main():
 
     print("\nConfusion matrix:")
     predictions.groupBy(
+        LABEL_COLUMN,
+        "prediction"
+    ).count().orderBy(
+        LABEL_COLUMN,
+        "prediction"
+    ).show()
+
+    print("\nTraining Random Forest model...")
+
+    rf = RandomForestClassifier(
+        featuresCol="features",
+        labelCol=LABEL_COLUMN,
+        numTrees=20,
+        maxDepth=8,
+        seed=42
+    )
+
+    rf_model = rf.fit(train_df)
+
+    print("\nRandom Forest Feature Importances:")
+
+    feature_names = NUMERIC_FEATURES + ["type_encoded"]
+
+    for name, importance in zip(
+        feature_names,
+        rf_model.featureImportances
+    ):
+        print(f"{name}: {importance:.6f}")
+
+    rf_predictions = rf_model.transform(test_df)
+
+    rf_pr_auc = pr_evaluator.evaluate(rf_predictions)
+    rf_roc_auc = roc_evaluator.evaluate(rf_predictions)
+
+    rf_confusion_rows = (
+        rf_predictions
+        .groupBy(LABEL_COLUMN, "prediction")
+        .count()
+        .collect()
+    )
+
+    rf_confusion = {
+        (int(row[LABEL_COLUMN]), int(row["prediction"])): row["count"]
+        for row in rf_confusion_rows
+    }
+
+    rf_tn = rf_confusion.get((0, 0), 0)
+    rf_fp = rf_confusion.get((0, 1), 0)
+    rf_fn = rf_confusion.get((1, 0), 0)
+    rf_tp = rf_confusion.get((1, 1), 0)
+
+    rf_precision = (
+        rf_tp / (rf_tp + rf_fp)
+        if (rf_tp + rf_fp)
+        else 0.0
+    )
+
+    rf_recall = (
+        rf_tp / (rf_tp + rf_fn)
+        if (rf_tp + rf_fn)
+        else 0.0
+    )
+
+    rf_f1 = (
+        2 * rf_precision * rf_recall / (rf_precision + rf_recall)
+        if (rf_precision + rf_recall)
+        else 0.0
+    )
+
+    rf_accuracy = (
+        (rf_tp + rf_tn) /
+        (rf_tp + rf_tn + rf_fp + rf_fn)
+    )
+
+    print("\nRandom Forest Evaluation:")
+    print(f"PR-AUC:          {rf_pr_auc:.4f}")
+    print(f"ROC-AUC:         {rf_roc_auc:.4f}")
+    print(f"Fraud Precision: {rf_precision:.4f}")
+    print(f"Fraud Recall:    {rf_recall:.4f}")
+    print(f"Fraud F1:        {rf_f1:.4f}")
+    print(f"Accuracy:        {rf_accuracy:.4f}")
+
+    print("\nRandom Forest Confusion Matrix:")
+    rf_predictions.groupBy(
         LABEL_COLUMN,
         "prediction"
     ).count().orderBy(
