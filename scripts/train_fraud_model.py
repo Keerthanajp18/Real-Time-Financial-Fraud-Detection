@@ -30,6 +30,15 @@ NUMERIC_FEATURES = [
     "step",
 ]
 
+RESTRICTED_NUMERIC_FEATURES = [
+    "amount",
+    "is_high_risk_type",
+    "is_merchant_dest",
+    "is_customer_dest",
+    "is_large_transaction",
+    "step",
+]
+
 CATEGORICAL_FEATURES = [
     "type",
 ]
@@ -62,13 +71,19 @@ def main():
         outputCol="features"
     )
 
+    restricted_assembler = VectorAssembler(
+        inputCols=RESTRICTED_NUMERIC_FEATURES + ["type_encoded"],
+        outputCol="restricted_features"
+    )
+
     pipeline = Pipeline(
         stages=[
             type_indexer,
             type_encoder,
-            assembler
+            assembler,
+            restricted_assembler
         ]
-    )
+    )   
 
     train_raw_df, test_raw_df = df.randomSplit(
     [0.8, 0.2],
@@ -175,6 +190,69 @@ def main():
 
     print("\nRandom Forest Feature Importances:")
 
+    print("\nTraining Restricted Random Forest model...")
+
+    restricted_rf = RandomForestClassifier(
+        featuresCol="restricted_features",
+        labelCol=LABEL_COLUMN,
+        numTrees=20,
+        maxDepth=8,
+        seed=42
+    )
+
+    restricted_rf_model = restricted_rf.fit(train_df)
+
+    restricted_predictions = restricted_rf_model.transform(test_df)
+
+    restricted_pr_auc = pr_evaluator.evaluate(restricted_predictions)
+    restricted_roc_auc = roc_evaluator.evaluate(restricted_predictions)
+
+    restricted_confusion_rows = (
+        restricted_predictions
+        .groupBy(LABEL_COLUMN, "prediction")
+        .count()
+        .collect()
+    )
+
+    restricted_confusion = {
+        (int(row[LABEL_COLUMN]), int(row["prediction"])): row["count"]
+        for row in restricted_confusion_rows
+    }
+
+    restricted_tn = restricted_confusion.get((0, 0), 0)
+    restricted_fp = restricted_confusion.get((0, 1), 0) 
+    restricted_fn = restricted_confusion.get((1, 0), 0)
+    restricted_tp = restricted_confusion.get((1, 1), 0)
+
+    restricted_precision = (
+        restricted_tp / (restricted_tp + restricted_fp)
+        if (restricted_tp + restricted_fp)
+        else 0.0
+    )
+
+    restricted_recall = (
+        restricted_tp / (restricted_tp + restricted_fn)
+        if (restricted_tp + restricted_fn)
+        else 0.0
+    )
+
+    restricted_f1 = (
+        2 * restricted_precision * restricted_recall
+        / (restricted_precision + restricted_recall)
+        if (restricted_precision + restricted_recall)
+        else 0.0
+    )
+
+    restricted_accuracy = (
+        (restricted_tp + restricted_tn)
+        / (
+            restricted_tp
+            + restricted_tn
+            + restricted_fp
+            + restricted_fn
+        )
+    )
+
     feature_names = NUMERIC_FEATURES + ["type_encoded"]
 
     for name, importance in zip(
@@ -235,6 +313,23 @@ def main():
     print(f"Fraud Recall:    {rf_recall:.4f}")
     print(f"Fraud F1:        {rf_f1:.4f}")
     print(f"Accuracy:        {rf_accuracy:.4f}")
+
+    print("\nRestricted Random Forest Evaluation:")
+    print(f"PR-AUC:          {restricted_pr_auc:.4f}")
+    print(f"ROC-AUC:         {restricted_roc_auc:.4f}")
+    print(f"Fraud Precision: {restricted_precision:.4f}")
+    print(f"Fraud Recall:    {restricted_recall:.4f}")
+    print(f"Fraud F1:        {restricted_f1:.4f}")
+    print(f"Accuracy:        {restricted_accuracy:.4f}")
+
+    print("\nRestricted Random Forest Confusion Matrix:")
+    restricted_predictions.groupBy(
+        LABEL_COLUMN,
+        "prediction"
+    ).count().orderBy(
+        LABEL_COLUMN,
+        "prediction"
+    ).show()
 
     print("\nRandom Forest Confusion Matrix:")
     rf_predictions.groupBy(
