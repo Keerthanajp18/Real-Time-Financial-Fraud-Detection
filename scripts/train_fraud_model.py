@@ -196,6 +196,79 @@ def main():
         "prediction"
     ).show()
 
+    print("\nTraining Safe-Feature Logistic Regression...")
+
+    safe_lr = LogisticRegression(
+        featuresCol="safe_features",
+        labelCol=LABEL_COLUMN,
+        maxIter=20
+    )
+
+    safe_lr_model = safe_lr.fit(train_df)
+
+    safe_lr_predictions = safe_lr_model.transform(test_df)
+
+    safe_lr_pr_auc = pr_evaluator.evaluate(safe_lr_predictions)
+    safe_lr_roc_auc = roc_evaluator.evaluate(safe_lr_predictions)
+
+    safe_lr_confusion_rows = (
+        safe_lr_predictions
+        .groupBy(LABEL_COLUMN, "prediction")
+        .count()
+        .collect()
+    )
+
+    safe_lr_confusion = {
+        (int(row[LABEL_COLUMN]), int(row["prediction"])): row["count"]
+        for row in safe_lr_confusion_rows
+    }
+
+    safe_lr_tn = safe_lr_confusion.get((0, 0), 0)
+    safe_lr_fp = safe_lr_confusion.get((0, 1), 0)
+    safe_lr_fn = safe_lr_confusion.get((1, 0), 0)
+    safe_lr_tp = safe_lr_confusion.get((1, 1), 0)
+
+    safe_lr_precision = (
+        safe_lr_tp / (safe_lr_tp + safe_lr_fp)
+        if (safe_lr_tp + safe_lr_fp)
+        else 0.0
+    )
+
+    safe_lr_recall = (
+        safe_lr_tp / (safe_lr_tp + safe_lr_fn)
+        if (safe_lr_tp + safe_lr_fn)
+        else 0.0
+    )
+
+    safe_lr_f1 = (
+        2 * safe_lr_precision * safe_lr_recall
+        / (safe_lr_precision + safe_lr_recall)
+        if (safe_lr_precision + safe_lr_recall)
+        else 0.0
+    )
+
+    safe_lr_accuracy = (
+        (safe_lr_tp + safe_lr_tn)
+        / (safe_lr_tp + safe_lr_tn + safe_lr_fp + safe_lr_fn)
+    )   
+
+    print("\nSafe-Feature Logistic Regression Evaluation:")
+    print(f"PR-AUC:          {safe_lr_pr_auc:.4f}")
+    print(f"ROC-AUC:         {safe_lr_roc_auc:.4f}")
+    print(f"Fraud Precision: {safe_lr_precision:.4f}")
+    print(f"Fraud Recall:    {safe_lr_recall:.4f}")
+    print(f"Fraud F1:        {safe_lr_f1:.4f}")
+    print(f"Accuracy:        {safe_lr_accuracy:.4f}")
+
+    print("\nSafe-Feature Logistic Regression Confusion Matrix:")
+    safe_lr_predictions.groupBy(
+        LABEL_COLUMN,
+        "prediction"
+    ).count().orderBy(
+        LABEL_COLUMN,
+        "prediction"
+    ).show()
+
     print("\nTraining Random Forest model...")
 
     rf = RandomForestClassifier(
