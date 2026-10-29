@@ -39,6 +39,20 @@ RESTRICTED_NUMERIC_FEATURES = [
     "step",
 ]
 
+SAFE_NUMERIC_FEATURES = [
+    "amount",
+    "oldbalanceOrg",
+    "oldbalanceDest",
+    "is_high_risk_type",
+    "is_merchant_dest",
+    "is_customer_dest",
+    "orig_zero_balance_flag",
+    "dest_zero_balance_flag",
+    "amount_to_orig_balance_ratio",
+    "is_large_transaction",
+    "step",
+]
+
 CATEGORICAL_FEATURES = [
     "type",
 ]
@@ -76,14 +90,20 @@ def main():
         outputCol="restricted_features"
     )
 
+    safe_assembler = VectorAssembler(
+        inputCols=SAFE_NUMERIC_FEATURES + ["type_encoded"],
+        outputCol="safe_features"
+    )
+
     pipeline = Pipeline(
         stages=[
             type_indexer,
             type_encoder,
             assembler,
-            restricted_assembler
+            restricted_assembler,
+            safe_assembler
         ]
-    )   
+    )    
 
     train_raw_df, test_raw_df = df.randomSplit(
     [0.8, 0.2],
@@ -333,6 +353,83 @@ def main():
 
     print("\nRandom Forest Confusion Matrix:")
     rf_predictions.groupBy(
+        LABEL_COLUMN,
+        "prediction"
+    ).count().orderBy(
+        LABEL_COLUMN,
+        "prediction"
+    ).show()
+
+    print("\nTraining Safe-Feature Random Forest model...")
+
+    safe_rf = RandomForestClassifier(
+        featuresCol="safe_features",
+        labelCol=LABEL_COLUMN,
+        numTrees=20,
+        maxDepth=8,
+        seed=42
+    )
+
+    safe_rf_model = safe_rf.fit(train_df)
+
+    safe_predictions = safe_rf_model.transform(test_df)
+
+    safe_pr_auc = pr_evaluator.evaluate(safe_predictions)
+    safe_roc_auc = roc_evaluator.evaluate(safe_predictions)
+
+    safe_confusion_rows = (
+        safe_predictions
+        .groupBy(LABEL_COLUMN, "prediction")
+        .count()
+        .collect()
+    )
+
+    safe_confusion = {
+        (int(row[LABEL_COLUMN]), int(row["prediction"])): row["count"]
+        for row in safe_confusion_rows
+    }
+
+    safe_tn = safe_confusion.get((0, 0), 0)
+    safe_fp = safe_confusion.get((0, 1), 0)
+    safe_fn = safe_confusion.get((1, 0), 0)
+    safe_tp = safe_confusion.get((1, 1), 0)
+
+    safe_precision = (
+        safe_tp / (safe_tp + safe_fp)
+        if (safe_tp + safe_fp)
+        else 0.0
+    )
+
+    safe_recall = (
+        safe_tp / (safe_tp + safe_fn)
+        if (safe_tp + safe_fn)
+        else 0.0
+    )
+
+    safe_f1 = (
+        2 * safe_precision * safe_recall
+        / (safe_precision + safe_recall)
+        if (safe_precision + safe_recall)
+        else 0.0
+    )
+
+    safe_accuracy = (
+        (safe_tp + safe_tn)
+        / (safe_tp + safe_tn + safe_fp + safe_fn)
+        if (safe_tp + safe_tn + safe_fp + safe_fn)
+        else 0.0
+    )
+
+    print("\nSafe-Feature Random Forest Evaluation:")
+    print(f"PR-AUC:          {safe_pr_auc:.4f}")
+    print(f"ROC-AUC:         {safe_roc_auc:.4f}")
+    print(f"Fraud Precision: {safe_precision:.4f}")
+    print(f"Fraud Recall:    {safe_recall:.4f}")
+    print(f"Fraud F1:        {safe_f1:.4f}")
+    print(f"Accuracy:        {safe_accuracy:.4f}")
+
+    print("\nSafe-Feature Random Forest Confusion Matrix:")
+    safe_predictions.groupBy(
         LABEL_COLUMN,
         "prediction"
     ).count().orderBy(
