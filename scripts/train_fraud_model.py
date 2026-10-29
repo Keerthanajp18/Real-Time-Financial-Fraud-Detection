@@ -119,6 +119,21 @@ def main():
     train_df = pipeline_model.transform(train_raw_df)
     test_df = pipeline_model.transform(test_raw_df)
 
+    model_train_df, validation_df = train_df.randomSplit(
+        [0.8, 0.2],
+        seed=123
+    )
+
+    print("\nThreshold-tuning split:")
+    print(f"Model training rows: {model_train_df.count():,}")
+    print(f"Validation rows:     {validation_df.count():,}")
+
+    print("\nModel training class distribution:")
+    model_train_df.groupBy(LABEL_COLUMN).count().orderBy(LABEL_COLUMN).show()
+
+    print("\nValidation class distribution:")
+    validation_df.groupBy(LABEL_COLUMN).count().orderBy(LABEL_COLUMN).show()
+
     print("\nTraining Logistic Regression baseline...")
 
     lr = LogisticRegression(
