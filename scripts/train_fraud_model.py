@@ -1,4 +1,8 @@
-from pyspark.ml.classification import LogisticRegression, RandomForestClassifier
+from pyspark.ml.classification import (
+    LogisticRegression,
+    RandomForestClassifier,
+    GBTClassifier,
+)
 from pyspark.sql import SparkSession
 from pyspark.ml import Pipeline
 from pyspark.ml.feature import StringIndexer, OneHotEncoder, VectorAssembler
@@ -503,6 +507,81 @@ def main():
 
     print("\nSafe-Feature Random Forest Confusion Matrix:")
     safe_predictions.groupBy(
+        LABEL_COLUMN,
+        "prediction"
+    ).count().orderBy(
+        LABEL_COLUMN,
+        "prediction"
+    ).show()
+
+    print("\nTraining Safe-Feature Gradient-Boosted Trees model...")
+
+    safe_gbt = GBTClassifier(
+        featuresCol="safe_features",
+        labelCol=LABEL_COLUMN,
+        maxIter=20,
+        maxDepth=5,
+        seed=42
+    )
+
+    safe_gbt_model = safe_gbt.fit(train_df)
+
+    safe_gbt_predictions = safe_gbt_model.transform(test_df)
+
+    safe_gbt_pr_auc = pr_evaluator.evaluate(safe_gbt_predictions)
+    safe_gbt_roc_auc = roc_evaluator.evaluate(safe_gbt_predictions)
+
+    safe_gbt_confusion_rows = (
+        safe_gbt_predictions
+        .groupBy(LABEL_COLUMN, "prediction")
+        .count()
+        .collect()
+    )
+
+    safe_gbt_confusion = {
+        (int(row[LABEL_COLUMN]), int(row["prediction"])): row["count"]
+        for row in safe_gbt_confusion_rows
+    }
+
+    safe_gbt_tn = safe_gbt_confusion.get((0, 0), 0)
+    safe_gbt_fp = safe_gbt_confusion.get((0, 1), 0)
+    safe_gbt_fn = safe_gbt_confusion.get((1, 0), 0)
+    safe_gbt_tp = safe_gbt_confusion.get((1, 1), 0)
+
+    safe_gbt_precision = (
+        safe_gbt_tp / (safe_gbt_tp + safe_gbt_fp)
+        if (safe_gbt_tp + safe_gbt_fp)
+        else 0.0
+    )
+
+    safe_gbt_recall = (
+        safe_gbt_tp / (safe_gbt_tp + safe_gbt_fn)
+        if (safe_gbt_tp + safe_gbt_fn)
+        else 0.0
+    )
+
+    safe_gbt_f1 = (
+        2 * safe_gbt_precision * safe_gbt_recall
+        / (safe_gbt_precision + safe_gbt_recall)
+        if (safe_gbt_precision + safe_gbt_recall)
+        else 0.0
+    )
+
+    safe_gbt_accuracy = (
+        (safe_gbt_tp + safe_gbt_tn)
+        / (safe_gbt_tp + safe_gbt_tn + safe_gbt_fp + safe_gbt_fn)
+    )
+
+    print("\nSafe-Feature GBT Evaluation:")
+    print(f"PR-AUC:          {safe_gbt_pr_auc:.4f}")
+    print(f"ROC-AUC:         {safe_gbt_roc_auc:.4f}")
+    print(f"Fraud Precision: {safe_gbt_precision:.4f}")
+    print(f"Fraud Recall:    {safe_gbt_recall:.4f}")
+    print(f"Fraud F1:        {safe_gbt_f1:.4f}")
+    print(f"Accuracy:        {safe_gbt_accuracy:.4f}")
+
+    print("\nSafe-Feature GBT Confusion Matrix:")
+    safe_gbt_predictions.groupBy(
         LABEL_COLUMN,
         "prediction"
     ).count().orderBy(
