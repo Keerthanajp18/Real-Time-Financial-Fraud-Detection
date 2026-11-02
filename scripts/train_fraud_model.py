@@ -1,3 +1,4 @@
+import json
 import os
 from pyspark.sql import functions as F
 from pyspark.ml.functions import vector_to_array
@@ -54,7 +55,6 @@ SAFE_NUMERIC_FEATURES = [
     "is_merchant_dest",
     "is_customer_dest",
     "orig_zero_balance_flag",
-    "dest_zero_balance_flag",
     "amount_to_orig_balance_ratio",
     "is_large_transaction",
     "step",
@@ -775,8 +775,37 @@ def main():
     print("\nFraud label distribution:")
     df.groupBy(LABEL_COLUMN).count().show()
 
-    spark.stop()
+    print("\nSaving final Member 3 model artifacts...")
 
+    model_dir = "models/member3"
+    os.makedirs(model_dir, exist_ok=True)
+
+    pipeline_path = f"{model_dir}/preprocessing_pipeline"
+    gbt_model_path = f"{model_dir}/safe_gbt_model"
+    config_path = f"{model_dir}/model_config.json"
+
+    pipeline_model.write().overwrite().save(pipeline_path)
+    safe_gbt_model.write().overwrite().save(gbt_model_path)
+
+    model_config = {
+        "model_type": "GBTClassifier",
+        "threshold": 0.4,
+        "features": SAFE_NUMERIC_FEATURES,
+        "categorical_features": CATEGORICAL_FEATURES,
+        "label": LABEL_COLUMN,
+        "test_precision": final_precision,
+        "test_recall": final_recall,
+        "test_f1": final_f1,
+    }
+
+    with open(config_path, "w") as f:
+        json.dump(model_config, f, indent=4)
+
+    print(f"Preprocessing pipeline saved to: {pipeline_path}")
+    print(f"GBT model saved to:              {gbt_model_path}")
+    print(f"Model configuration saved to:    {config_path}")
+
+    spark.stop()
 
 if __name__ == "__main__":
     main()

@@ -1,0 +1,23 @@
+{
+    "model_type": "GBTClassifier",
+    "threshold": 0.4,
+    "features": [
+        "amount",
+        "oldbalanceOrg",
+        "oldbalanceDest",
+        "is_high_risk_type",
+        "is_merchant_dest",
+        "is_customer_dest",
+        "orig_zero_balance_flag",
+        "amount_to_orig_balance_ratio",
+        "is_large_transaction",
+        "step"
+    ],
+    "categorical_features": [
+        "type"
+    ],
+    "label": "isFraud",
+    "test_precision": 0.772756206238065,
+    "test_recall": 0.7260765550239234,
+    "test_f1": 0.7486894850447117
+}
