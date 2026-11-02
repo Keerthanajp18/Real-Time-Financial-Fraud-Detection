@@ -1,3 +1,6 @@
+import os
+from pyspark.sql import functions as F
+from pyspark.ml.functions import vector_to_array
 from pyspark.ml.classification import (
     LogisticRegression,
     RandomForestClassifier,
@@ -66,7 +69,7 @@ def main():
     spark = (
         SparkSession.builder
         .appName("Member3_FraudDetection")
-        .master("local[*]")
+        .master(os.getenv("SPARK_MASTER", "local[*]"))
         .getOrCreate()
     )
 
@@ -603,6 +606,142 @@ def main():
         LABEL_COLUMN,
         "prediction"
     ).show()
+
+    print("\nTraining GBT for threshold tuning...")
+
+    tuning_gbt = GBTClassifier(
+        featuresCol="safe_features",
+        labelCol=LABEL_COLUMN,
+        maxIter=20,
+        maxDepth=5,
+        seed=42
+    )
+
+    tuning_gbt_model = tuning_gbt.fit(model_train_df)
+
+    validation_predictions = tuning_gbt_model.transform(validation_df)
+
+    validation_predictions = validation_predictions.withColumn(
+        "fraud_probability",
+        vector_to_array("probability")[1]
+    )
+
+    validation_predictions.cache()
+
+    thresholds = [0.1, 0.2, 0.3, 0.4, 0.5]
+
+    print("\n=== GBT THRESHOLD TUNING ON VALIDATION SET ===")
+
+    for threshold in thresholds:
+
+        threshold_predictions = validation_predictions.withColumn(
+            "threshold_prediction",
+            F.when(
+                F.col("fraud_probability") >= threshold,
+                1.0
+            ).otherwise(0.0)
+        )
+
+        rows = (
+            threshold_predictions
+            .groupBy(LABEL_COLUMN, "threshold_prediction")
+            .count()
+            .collect()
+        )
+
+        confusion = {
+            (
+                int(row[LABEL_COLUMN]),
+                int(row["threshold_prediction"])
+            ): row["count"]
+            for row in rows
+        }
+
+        tn = confusion.get((0, 0), 0)
+        fp = confusion.get((0, 1), 0)
+        fn = confusion.get((1, 0), 0)
+        tp = confusion.get((1, 1), 0)
+
+        precision = tp / (tp + fp) if (tp + fp) else 0.0
+        recall = tp / (tp + fn) if (tp + fn) else 0.0
+
+        f1 = (
+            2 * precision * recall / (precision + recall)
+            if (precision + recall)
+            else 0.0
+        )
+
+        print(
+            f"Threshold={threshold:.1f} | "
+            f"Precision={precision:.4f} | "
+            f"Recall={recall:.4f} | "
+            f"F1={f1:.4f} | "
+            f"TP={tp} | FP={fp} | FN={fn}"
+        )
+
+    final_threshold = 0.4
+
+    print(
+        f"\n=== FINAL SAFE GBT TEST EVALUATION "
+        f"(threshold={final_threshold}) ==="
+    )
+
+    final_test_predictions = safe_gbt_predictions.withColumn(
+        "fraud_probability",
+        vector_to_array("probability")[1]
+    ).withColumn(
+        "final_prediction",
+        F.when(
+            F.col("fraud_probability") >= final_threshold,
+            1.0
+        ).otherwise(0.0)
+    )
+
+    final_rows = (
+        final_test_predictions
+        .groupBy(LABEL_COLUMN, "final_prediction")
+        .count()
+        .collect()
+    )
+
+    final_confusion = {
+        (
+            int(row[LABEL_COLUMN]),
+            int(row["final_prediction"])
+        ): row["count"]
+        for row in final_rows
+    }
+
+    final_tn = final_confusion.get((0, 0), 0)
+    final_fp = final_confusion.get((0, 1), 0)
+    final_fn = final_confusion.get((1, 0), 0)
+    final_tp = final_confusion.get((1, 1), 0)
+
+    final_precision = (
+        final_tp / (final_tp + final_fp)
+        if (final_tp + final_fp)
+        else 0.0
+    )
+
+    final_recall = (
+        final_tp / (final_tp + final_fn)
+        if (final_tp + final_fn)
+        else 0.0
+    )
+
+    final_f1 = (
+        2 * final_precision * final_recall
+        / (final_precision + final_recall)
+        if (final_precision + final_recall)
+        else 0.0
+    )
+
+    print(f"Fraud Precision: {final_precision:.4f}")
+    print(f"Fraud Recall:    {final_recall:.4f}")
+    print(f"Fraud F1:        {final_f1:.4f}")
+    print(f"TP={final_tp} | FP={final_fp} | FN={final_fn} | TN={final_tn}")
+
+    validation_predictions.unpersist()
 
     print("\nTraining set label distribution:")
     train_df.groupBy(LABEL_COLUMN).count().show()
