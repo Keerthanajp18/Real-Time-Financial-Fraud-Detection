@@ -146,8 +146,9 @@ row per `transaction_id`.
   `${AIRFLOW_UID:-0}:0` (root by default). On Linux, `AIRFLOW_UID=$(id -u)` keeps
   outputs owned by your user.
 - **Batch ETL import:** `src/etl/batch_etl.py` imports `LakehouseTelemetry`, which
-  commit `9e71fa3` removed. Member 2 fixes this in PR #3; merge PR #3 for `member2_etl`
-  to run.
+  commit `9e71fa3` removed. The class is restored in `src/utils/lakehouse_telemetry.py`.
+  Member 2's PR #3 adds a fallback class in `batch_etl.py`, but its line 95 still has the
+  old bare import, so PR #3 alone does not fix the `ImportError`.
 - **Tests:** the `spark_session` and lakehouse fixtures lost from `tests/conftest.py`
   in the `member2-pr` merge are restored from the `member2` branch.
 - **Known limit:** streaming ETL loads `spark-sql-kafka-0-10_2.12:3.5.0`
