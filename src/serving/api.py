@@ -6,6 +6,7 @@ Docs:         http://localhost:8000/docs
 """
 
 import os
+from typing import Optional
 
 import psycopg2
 from fastapi import Depends, FastAPI, HTTPException, Query
@@ -61,14 +62,19 @@ def get_transaction(transaction_id: str, conn=Depends(get_conn)):
 
 @app.get("/alerts")
 def get_alerts(
-    min_probability: float = Query(0.5, ge=0.0, le=1.0),
+    min_probability: Optional[float] = Query(None, ge=0.0, le=1.0),
     limit: int = Query(100, ge=1, le=1000),
     conn=Depends(get_conn),
 ):
+    # Without min_probability, use the model's own threshold (fraud_prediction = 1)
+    if min_probability is None:
+        where, params = "fraud_prediction = 1", (limit,)
+    else:
+        where, params = "fraud_probability >= %s", (min_probability, limit)
     with conn.cursor() as cur:
         cur.execute(
-            _SELECT + " WHERE fraud_probability >= %s "
+            _SELECT + f" WHERE {where} "
             "ORDER BY fraud_probability DESC, transaction_id LIMIT %s",
-            (min_probability, limit),
+            params,
         )
         return cur.fetchall()

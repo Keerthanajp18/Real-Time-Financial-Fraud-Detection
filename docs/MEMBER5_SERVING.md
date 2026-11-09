@@ -46,7 +46,8 @@ Connection string: env var `FRAUD_DB_URL`
 |----------|---------|
 | `GET /health` | `{"status": "ok", "database": "ok"}`, or 503 if Postgres is down |
 | `GET /transactions/{transaction_id}` | One prediction, or 404 |
-| `GET /alerts?min_probability=0.5&limit=100` | Predictions with `fraud_probability >= min_probability`, highest first. `min_probability` must be 0–1, `limit` 1–1000 |
+| `GET /alerts?limit=100` | Transactions the model flagged (`fraud_prediction = 1`, i.e. at `model_threshold`, currently 0.4), highest probability first |
+| `GET /alerts?min_probability=0.9&limit=100` | Predictions with `fraud_probability >= min_probability`, highest first. `min_probability` must be 0–1, `limit` 1–1000 |
 
 Before the first load step has run, `/transactions` and `/alerts` return
 503 `{"detail": "No predictions loaded yet"}`.
@@ -87,6 +88,25 @@ run a test container on another port:
 docker run -d --rm --name m5-test-pg -e POSTGRES_USER=airflow -e POSTGRES_PASSWORD=airflow -p 55432:5432 postgres:15
 FRAUD_TEST_DB_URL=postgresql://airflow:airflow@localhost:55432/fraud_test pytest tests/test_serving.py -v
 ```
+
+## Verified with real data
+
+On 2026-11-09, `predict_fraud.py` was run on the current Gold sample (10 rows),
+then loaded and queried through the API container. Schema, load and all endpoints
+matched the contract (10 rows loaded, 1 flagged at probability 0.416).
+
+## Team blocker: Spark version mismatch (Member 3 / Member 4)
+
+The model in `models/member3/` was saved with **Spark 4.2.0**
+(`"sparkVersion":"4.2.0"` in its metadata), but `airflow/Dockerfile` installs
+`pyspark>=3.5.0,<4.0`. On Spark 3.5 loading the GBT model fails:
+
+```
+[UNRESOLVED_COLUMN.WITH_SUGGESTION] A column or function parameter with name `treeID` cannot be resolved.
+```
+
+Inference worked with `pyspark==4.2.0` (Java 17). Either the Airflow image moves
+to PySpark 4.x, or Member 3 re-saves the model with Spark 3.5.
 
 ## Airflow integration (to agree with Member 4)
 
