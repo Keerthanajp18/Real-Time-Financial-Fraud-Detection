@@ -12,7 +12,7 @@ USER airflow
 # Project dependencies used by Members 1-3 (subset of requirements.txt;
 # numpy/pytest are intentionally left out of the Airflow image)
 RUN pip install --no-cache-dir \
-    "pyspark>=3.5.0,<4.0" \
+    "pyspark==4.2.0" \
     "kafka-python-ng>=2.2.2" \
     "pydantic>=2.0.0" \
     "python-dotenv>=1.0.0" \
