@@ -1,4 +1,25 @@
-version: '3.8'
+x-airflow-common: &airflow-common
+  build: ./airflow
+  image: fraud-platform-airflow:latest
+  environment: &airflow-env
+    AIRFLOW__CORE__DAGS_FOLDER: /opt/airflow/dags
+    AIRFLOW__CORE__LOAD_EXAMPLES: 'False'
+    AIRFLOW__CORE__EXECUTOR: LocalExecutor
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
+    # Used by Member 1's ingestion script (reaches the broker on the Docker network)
+    KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+    PYTHONPATH: /opt/airflow
+  volumes:
+    - ./airflow/dags:/opt/airflow/dags
+    - ./src:/opt/airflow/src
+    - ./scripts:/opt/airflow/scripts
+    - ./models:/opt/airflow/models
+    - ./dataset:/opt/airflow/dataset
+    - ./data:/opt/airflow/data
+    - airflow_logs:/opt/airflow/logs
+  depends_on:
+    postgres:
+      condition: service_healthy
 
 services:
   kafka:
@@ -38,3 +59,54 @@ services:
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
     depends_on:
       - kafka
+
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U airflow -d airflow"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # One-off: create the Airflow metadata tables and the admin user, then exit
+  airflow-init:
+    <<: *airflow-common
+    container_name: fraud-platform-airflow-init
+    restart: "no"
+    command: >
+      bash -c "airflow db init &&
+               (airflow users create --username admin --password admin --firstname Admin --lastname User --role Admin --email admin@frauddetection.com || true)"
+
+  airflow-webserver:
+    <<: *airflow-common
+    container_name: fraud-platform-airflow-webserver
+    command: webserver
+    ports:
+      - "8081:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+
+  airflow-scheduler:
+    <<: *airflow-common
+    container_name: fraud-platform-airflow-scheduler
+    command: scheduler
+    depends_on:
+      postgres:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+
+volumes:
+  postgres_data:
+  airflow_logs:
