@@ -58,18 +58,18 @@ class BronzeLayerManager:
     ) -> Dict[str, Union[int, str]]:
         """
         Writes raw DataFrame into Bronze Parquet directory.
-        
+
         Args:
             df: Raw Spark DataFrame.
             source_name: Description or path of source data.
             mode: Save mode ('append' or 'overwrite').
             batch_id: Optional batch ID string.
-            
+
         Returns:
             Dictionary containing write metrics.
         """
         bronze_df = self.add_ingestion_metadata(df, source_name=source_name, batch_id=batch_id)
-        
+
         # Count records before writing
         record_count = bronze_df.count()
         logger.info(f"Writing {record_count:,} records to Bronze Parquet at: {self.output_path} (mode={mode})")

@@ -35,11 +35,11 @@ class SilverLayerManager:
           2. Routes rejected records to Quarantine
           3. Deduplicates valid records
           4. Writes clean records to Silver Parquet
-          
+
         Args:
             df: Input DataFrame (typically read from Bronze).
             mode: Write mode ('append' or 'overwrite').
-            
+
         Returns:
             Dictionary with counts of input, valid, quarantined, and deduplicated records.
         """

@@ -64,13 +64,13 @@ def get_spark_session(
 ) -> SparkSession:
     """
     Creates or retrieves an optimized, resilient Apache Spark session for local/cluster lakehouse workloads.
-    
+
     Args:
         app_name: Name of the Spark application.
         master: Master URL (default: 'local[*]').
         enable_kafka: If True, adds the Kafka structured streaming JAR package.
         extra_configs: Optional dictionary of extra Spark configuration keys and values.
-        
+
     Returns:
         Configured SparkSession instance.
     """

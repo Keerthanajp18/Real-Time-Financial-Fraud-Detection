@@ -98,6 +98,10 @@ class StreamingLakehouseETL:
         Args:
             trigger_processing_time: Micro-batch trigger interval (e.g. '5 seconds').
             
+
+        Args:
+            trigger_processing_time: Micro-batch trigger interval (e.g. '5 seconds').
+
         Returns:
             Active StreamingQuery handle.
         """

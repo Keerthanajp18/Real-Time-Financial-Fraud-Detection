@@ -38,11 +38,11 @@ class GoldLayerManager:
           1. Enriched transactions with engineered ML features
           2. Customer behavioral summaries
           3. Time-based hourly aggregates
-          
+
         Args:
             silver_df: Validated Silver DataFrame.
             mode: Write mode ('overwrite' or 'append').
-            
+
         Returns:
             Dictionary with counts and paths of generated Gold tables.
         """

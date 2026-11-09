@@ -51,7 +51,7 @@ def calculate_balance_discrepancies(df: DataFrame) -> DataFrame:
 def build_gold_enriched_features(df: DataFrame) -> DataFrame:
     """
     Transforms Silver cleaned transactions into Gold enriched features.
-    
+
     CRITICAL: Preserves ground-truth 'isFraud' and 'isFlaggedFraud' strictly as
     evaluation targets. Live predictive features are derived ONLY from transaction
     attributes, entity accounts, amounts, and mathematical balance relationships.

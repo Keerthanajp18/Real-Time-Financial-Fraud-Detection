@@ -92,6 +92,10 @@ except (ImportError, ModuleNotFoundError):
             lines.append("=" * 70)
             return "\n".join(lines)
 
+from src.utils.lakehouse_telemetry import LakehouseTelemetry
+
+logger = setup_logger("batch_etl")
+
 
 class BatchLakehouseETL:
     """
@@ -121,6 +125,11 @@ class BatchLakehouseETL:
             input_path: Path to dataset file or folder.
             file_format: 'csv', 'json', or 'parquet'.
             
+
+        Args:
+            input_path: Path to dataset file or folder.
+            file_format: 'csv', 'json', or 'parquet'.
+
         Returns:
             Extracted raw Spark DataFrame.
         """
@@ -152,6 +161,7 @@ class BatchLakehouseETL:
         Executes the full End-to-End Batch ETL:
           Extract -> Bronze -> Silver -> Gold
           
+
         Args:
             input_path: Input file path (defaults to config.default_input_dataset).
             file_format: Format of input file ('csv', 'json', 'parquet').
@@ -160,6 +170,7 @@ class BatchLakehouseETL:
             gold_mode: Write mode for Gold ('overwrite' or 'append').
             max_records: Optional limit on number of rows to ingest.
             
+
         Returns:
             Execution summary dictionary with complete layer telemetry.
         """

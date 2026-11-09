@@ -84,7 +84,7 @@ def validate_and_split_records(df: DataFrame) -> Tuple[DataFrame, DataFrame]:
     """
     Evaluates transactions against strict business quality rules.
     Splits into (valid_records, quarantined_records) without silently discarding bad data.
-    
+
     Quality Rules:
       1. Step is non-null and >= 1
       2. Transaction type is one of PAYMENT, TRANSFER, CASH_OUT, DEBIT, CASH_IN
@@ -150,7 +150,7 @@ def deduplicate_transactions(df: DataFrame) -> DataFrame:
     """
     Deduplicates records on the composite business key:
     (step, type, amount, nameOrig, nameDest, oldbalanceOrg, newbalanceOrig).
-    
+
     If duplicates exist, preserves the record with the earliest ingestion timestamp.
     """
     business_keys = [

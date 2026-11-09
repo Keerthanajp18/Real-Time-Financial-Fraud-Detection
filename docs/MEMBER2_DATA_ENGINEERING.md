@@ -40,7 +40,7 @@ flowchart TD
             BRONZE[("Bronze Layer<br/>data/bronze/transactions<br/>Raw + Ingestion Metadata")]
             QUARANTINE[("Quarantine Store<br/>data/quarantine/transactions<br/>Rejected Rows + Audit Reason")]
             SILVER[("Silver Layer<br/>data/silver/transactions<br/>Cleaned, Typed, Deduplicated")]
-            
+
             subgraph Gold["Gold Layer (data/gold/)"]
                 GOLD_FEAT[("enriched_transactions<br/>ML Features + transaction_id")]
                 GOLD_CUST[("customer_aggregates<br/>Account Profiles")]
@@ -60,7 +60,7 @@ flowchart TD
         M3["Member 3: Fraud Detection & ML<br/>(Spark MLlib, Classification Models)"]
         M4["Member 4: Transformation & Quality<br/>(dbt models, Airflow DAGs, OpenLineage)"]
         M5["Member 5: Backend & API<br/>(PostgreSQL, FastAPI, Docker)"]
-        
+
         GOLD_FEAT --> M3
         GOLD_FEAT --> M4
         GOLD_CUST --> M5
