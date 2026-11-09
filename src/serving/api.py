@@ -14,7 +14,7 @@ from fastapi.responses import JSONResponse
 from psycopg2.errors import UndefinedTable
 from psycopg2.extras import RealDictCursor
 
-from src.serving.db import DEFAULT_DB_URL, PREDICTION_COLUMNS
+from src.serving.db import DEFAULT_DB_URL, PREDICTION_COLUMNS, ensure_database
 
 app = FastAPI(title="Fraud Detection API", version="1.0.0")
 
@@ -29,14 +29,16 @@ _SELECT = "SELECT {}, loaded_at FROM fraud_predictions".format(", ".join(PREDICT
 
 def get_conn():
     # shortcut: one connection per request, no pool; add psycopg2.pool if traffic grows
+    db_url = os.getenv("FRAUD_DB_URL", DEFAULT_DB_URL)
     try:
-        conn = psycopg2.connect(
-            os.getenv("FRAUD_DB_URL", DEFAULT_DB_URL),
-            cursor_factory=RealDictCursor,
-            connect_timeout=5,
-        )
+        conn = psycopg2.connect(db_url, cursor_factory=RealDictCursor, connect_timeout=5)
     except psycopg2.OperationalError:
-        raise HTTPException(status_code=503, detail="Database unavailable")
+        try:
+            # Fresh Postgres: the database does not exist until the first load, so create it
+            ensure_database(db_url)
+            conn = psycopg2.connect(db_url, cursor_factory=RealDictCursor, connect_timeout=5)
+        except psycopg2.OperationalError:
+            raise HTTPException(status_code=503, detail="Database unavailable")
     try:
         yield conn
     finally:

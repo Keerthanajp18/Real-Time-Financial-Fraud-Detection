@@ -69,6 +69,7 @@ def ensure_database(db_url: str) -> None:
     """Create the target database if it does not exist yet."""
     params = parse_dsn(db_url)
     name = params.pop("dbname")
+    params.setdefault("connect_timeout", 5)
     conn = psycopg2.connect(dbname="postgres", **params)
     conn.autocommit = True  # CREATE DATABASE cannot run inside a transaction
     try:
