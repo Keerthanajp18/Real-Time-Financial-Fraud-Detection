@@ -132,6 +132,22 @@ def test_api_returns_503_before_first_load(db_url):
     assert response.json() == {"detail": "No predictions loaded yet"}
 
 
+def test_api_creates_missing_database(db_url, monkeypatch):
+    from src.serving.api import app
+
+    fresh_url = db_url.rsplit("/", 1)[0] + "/fraud_test_fresh"
+    conn = psycopg2.connect(db_url.rsplit("/", 1)[0] + "/postgres")
+    conn.autocommit = True
+    with conn.cursor() as cur:
+        cur.execute("DROP DATABASE IF EXISTS fraud_test_fresh")
+    conn.close()
+    monkeypatch.setenv("FRAUD_DB_URL", fresh_url)
+
+    client = TestClient(app)
+    assert client.get("/health").status_code == 200
+    assert client.get("/alerts").json() == {"detail": "No predictions loaded yet"}
+
+
 def test_api_returns_503_when_db_down(monkeypatch):
     from src.serving.api import app
 
