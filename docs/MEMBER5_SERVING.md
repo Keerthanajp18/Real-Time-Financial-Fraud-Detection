@@ -44,7 +44,7 @@ Connection string: env var `FRAUD_DB_URL`
 
 | Endpoint | Returns |
 |----------|---------|
-| `GET /health` | `{"status": "ok", "database": "ok"}`, or 503 if Postgres is down |
+| `GET /health` | `{"status": "ok", "database": "ok"}`, or 503 if Postgres is down. Creates the `fraud` database if it does not exist yet |
 | `GET /transactions/{transaction_id}` | One prediction, or 404 |
 | `GET /alerts?limit=100` | Transactions the model flagged (`fraud_prediction = 1`, i.e. at `model_threshold`, currently 0.4), highest probability first |
 | `GET /alerts?min_probability=0.9&limit=100` | Predictions with `fraud_probability >= min_probability`, highest first. `min_probability` must be 0–1, `limit` 1–1000 |
@@ -99,47 +99,56 @@ Scale check with 1M synthetic predictions (local Docker Postgres): first load
 35 s, full re-load (upsert) 50 s, so the full 6.3M PaySim set takes about
 4–5 minutes. `/alerts` queries use the probability index (under 2 ms).
 
-## Team blocker: Spark version mismatch (Member 3 / Member 4)
+## Airflow integration
 
-The model in `models/member3/` was saved with **Spark 4.2.0**
-(`"sparkVersion":"4.2.0"` in its metadata), but `airflow/Dockerfile` installs
-`pyspark>=3.5.0,<4.0`. On Spark 3.5 loading the GBT model fails:
+Task `member5_load_predictions` in `airflow/dags/fraud_detection_pipeline_dag.py`
+runs `scripts/load_predictions_to_postgres.py` after `member3_fraud_detection`:
 
 ```
-[UNRESOLVED_COLUMN.WITH_SUGGESTION] A column or function parameter with name `treeID` cannot be resolved.
+ingest >> etl >> quality >> inference >> member5_load_predictions >> health_check >> success
 ```
 
-Inference worked with `pyspark==4.2.0` (Java 17). Either the Airflow image moves
-to PySpark 4.x, or Member 3 re-saves the model with Spark 3.5.
+The Airflow containers get `FRAUD_DB_URL` from `docker-compose.yml`, and the
+Airflow image ships `psycopg2`. The Airflow `run_id` is stored in `pipeline_runs.dag_run_id`.
 
-## Airflow integration (to agree with Member 4)
+## Verified end to end in Airflow
 
-The Airflow containers already get `FRAUD_DB_URL` from `docker-compose.yml`, and
-the Airflow image already ships `psycopg2`. The DAG change is not made yet.
-Proposed task, after `member3_fraud_detection`:
+On 2026-11-09, `airflow dags test fraud_detection_pipeline` ran in the compose stack
+(Postgres, Kafka, API, Airflow image built from `airflow/Dockerfile`). All 7 tasks
+succeeded: ingestion, ETL, quality checks, inference, `member5_load_predictions`,
+health check, success. Postgres then held 10 predictions, `pipeline_runs` logged the
+run as `success`, and `/alerts` returned the flagged transaction (0.416).
 
-```python
-def run_member5_load(**context):
-    """Member 5: Load fraud predictions into Postgres for the API"""
-    cmd = [
-        sys.executable,
-        str(SCRIPTS_DIR / "load_predictions_to_postgres.py"),
-        "--input-path", "data/gold/fraud_predictions",
-        "--run-id", context["run_id"],
-    ]
-    result = subprocess.run(cmd, capture_output=True, text=True, cwd=PROJECT_ROOT)
-    if result.returncode != 0:
-        logger.error(f"Load failed: {result.stderr}")
-        raise Exception("Member 5 load failed")
-    logger.info(result.stdout)
-    return {"status": "success", "step": "serving_load"}
+The run used `dataset/sample_paysim.csv` copied to `dataset/paysim.csv`. The real
+PaySim file (~493 MB) is not in git: download it to `dataset/paysim.csv` first.
 
-# inside `with dag:`
-    load_task = PythonOperator(
-        task_id='member5_load_predictions',
-        python_callable=run_member5_load,
-        doc='Load fraud predictions into Postgres for the API',
-    )
+`rows_loaded` can be larger than the row count in `fraud_predictions`: the DAG appends
+to Bronze and Silver, so Gold repeats transaction ids across runs. The upsert keeps one
+row per `transaction_id`.
 
-ingest_task >> etl_task >> quality_task >> inference_task >> load_task >> health_check_task >> success_task
-```
+## Team fixes made on this branch
+
+- **Spark version:** the model in `models/member3/` was saved with Spark 4.2.0, and
+  on Spark 3.5 it fails to load (`UNRESOLVED_COLUMN ... treeID`). `airflow/Dockerfile`
+  now pins `pyspark==4.2.0`.
+- **Airflow image build:** the base image is Debian bullseye, whose apt repos are
+  retired. Java 17 is now copied from `eclipse-temurin:17-jre` instead of apt.
+- **pyarrow:** `pyarrow>=14` pulled 26.x, which needs NumPy 2; Airflow 2.7.2 ships
+  NumPy 1.24, so `import pyarrow` failed. Capped at `<20`.
+- **DAG `PROJECT_ROOT`:** it went up three folders, which is `/opt` in the container,
+  so every task failed with `can't open file '/opt/scripts/...'`. It now picks the
+  first parent folder that contains `scripts/`.
+- **DAG ETL input format:** the ETL task passed `--format parquet`, but the input is
+  the PaySim CSV, so Spark failed with `CANNOT_READ_FILE_FOOTER`. Now `--format csv`.
+- **File permissions:** Spark chmods the files it writes, and fails on files that came
+  from the host (`data/` is in git): `chmod: changing permissions of
+  '.../_SUCCESS': Operation not permitted`. Airflow containers now run as
+  `${AIRFLOW_UID:-0}:0` (root by default). On Linux, `AIRFLOW_UID=$(id -u)` keeps
+  outputs owned by your user.
+- **Batch ETL import:** `src/etl/batch_etl.py` imports `LakehouseTelemetry`, which
+  commit `9e71fa3` removed. The class is restored next to the new validation functions.
+- **Tests:** the `spark_session` and lakehouse fixtures lost from `tests/conftest.py`
+  in the `member2-pr` merge are restored from the `member2` branch.
+- **Known limit:** streaming ETL loads `spark-sql-kafka-0-10_2.12:3.5.0`
+  (`src/lakehouse/spark_session.py`), which does not match Spark 4. The DAG only runs
+  batch ETL, so it is not affected.
