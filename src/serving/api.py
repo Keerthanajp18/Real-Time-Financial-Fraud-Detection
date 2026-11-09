@@ -9,11 +9,19 @@ import os
 
 import psycopg2
 from fastapi import Depends, FastAPI, HTTPException, Query
+from fastapi.responses import JSONResponse
+from psycopg2.errors import UndefinedTable
 from psycopg2.extras import RealDictCursor
 
 from src.serving.db import DEFAULT_DB_URL, PREDICTION_COLUMNS
 
 app = FastAPI(title="Fraud Detection API", version="1.0.0")
+
+
+@app.exception_handler(UndefinedTable)
+def no_predictions_yet(request, exc):
+    # Tables are created by the first load step run
+    return JSONResponse(status_code=503, content={"detail": "No predictions loaded yet"})
 
 _SELECT = "SELECT {}, loaded_at FROM fraud_predictions".format(", ".join(PREDICTION_COLUMNS))
 

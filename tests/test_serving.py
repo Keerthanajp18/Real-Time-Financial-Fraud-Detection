@@ -118,6 +118,16 @@ def test_api_endpoints(db_url, tmp_path):
     assert client.get("/alerts", params={"min_probability": 2}).status_code == 422
 
 
+def test_api_returns_503_before_first_load(db_url):
+    from src.serving.api import app
+
+    client = TestClient(app)
+    assert client.get("/health").status_code == 200
+    response = client.get("/alerts")
+    assert response.status_code == 503
+    assert response.json() == {"detail": "No predictions loaded yet"}
+
+
 def test_api_returns_503_when_db_down(monkeypatch):
     from src.serving.api import app
 

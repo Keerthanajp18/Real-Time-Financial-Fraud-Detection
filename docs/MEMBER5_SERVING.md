@@ -48,6 +48,9 @@ Connection string: env var `FRAUD_DB_URL`
 | `GET /transactions/{transaction_id}` | One prediction, or 404 |
 | `GET /alerts?min_probability=0.5&limit=100` | Predictions with `fraud_probability >= min_probability`, highest first. `min_probability` must be 0–1, `limit` 1–1000 |
 
+Before the first load step has run, `/transactions` and `/alerts` return
+503 `{"detail": "No predictions loaded yet"}`.
+
 Interactive docs: http://localhost:8000/docs
 
 ## How to run
