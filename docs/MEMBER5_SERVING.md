@@ -95,6 +95,10 @@ On 2026-11-09, `predict_fraud.py` was run on the current Gold sample (10 rows),
 then loaded and queried through the API container. Schema, load and all endpoints
 matched the contract (10 rows loaded, 1 flagged at probability 0.416).
 
+Scale check with 1M synthetic predictions (local Docker Postgres): first load
+35 s, full re-load (upsert) 50 s, so the full 6.3M PaySim set takes about
+4–5 minutes. `/alerts` queries use the probability index (under 2 ms).
+
 ## Team blocker: Spark version mismatch (Member 3 / Member 4)
 
 The model in `models/member3/` was saved with **Spark 4.2.0**
