@@ -1,6 +1,10 @@
 x-airflow-common: &airflow-common
   build: ./airflow
   image: fraud-platform-airflow:latest
+  # Spark chmods the files it writes under ./data. Files that came from the host (git checkout)
+  # are not owned by the image's default uid 50000, so that fails. Root works on every OS;
+  # on Linux, set AIRFLOW_UID=$(id -u) to keep the outputs owned by your user.
+  user: "${AIRFLOW_UID:-0}:0"
   environment: &airflow-env
     AIRFLOW__CORE__DAGS_FOLDER: /opt/airflow/dags
     AIRFLOW__CORE__LOAD_EXAMPLES: 'False'

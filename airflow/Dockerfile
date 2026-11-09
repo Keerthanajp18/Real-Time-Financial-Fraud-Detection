@@ -16,4 +16,4 @@ RUN pip install --no-cache-dir \
     "kafka-python-ng>=2.2.2" \
     "pydantic>=2.0.0" \
     "python-dotenv>=1.0.0" \
-    "pyarrow>=14.0.0"
+    "pyarrow>=14.0.0,<20"  # pyarrow 20+ needs NumPy 2; Airflow 2.7.2 ships NumPy 1.24
