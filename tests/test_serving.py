@@ -100,7 +100,8 @@ def test_api_endpoints(db_url, tmp_path):
 
     src = write_predictions(
         tmp_path / "p",
-        [prediction("low", 0.1), prediction("mid", 0.6), prediction("high", 0.95)],
+        [prediction("low", 0.1, threshold=0.4), prediction("edge", 0.42, threshold=0.4),
+         prediction("mid", 0.6), prediction("high", 0.95)],
     )
     load_predictions(db_url, src)
     client = TestClient(app)
@@ -114,6 +115,9 @@ def test_api_endpoints(db_url, tmp_path):
 
     alerts = client.get("/alerts", params={"min_probability": 0.5}).json()
     assert [a["transaction_id"] for a in alerts] == ["high", "mid"]
+    # Default uses the model's threshold, so 0.42 at threshold 0.4 is included
+    default = client.get("/alerts").json()
+    assert [a["transaction_id"] for a in default] == ["high", "mid", "edge"]
     assert len(client.get("/alerts", params={"min_probability": 0.5, "limit": 1}).json()) == 1
     assert client.get("/alerts", params={"min_probability": 2}).status_code == 422
 
