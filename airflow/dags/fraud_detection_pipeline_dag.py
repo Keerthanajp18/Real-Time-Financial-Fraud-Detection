@@ -1,6 +1,6 @@
 """
 Member 4: Fraud Detection Pipeline Orchestration DAG
-Orchestrates: Ingestion → ETL → Quality Checks → Model Inference
+Orchestrates: Ingestion → ETL → Quality Checks → Model Inference → Serving Load
 Runs: Every 6 hours, with monitoring and alerting
 """
 
@@ -18,7 +18,8 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 # ==================== CONFIGURATION ====================
-PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+# Repo: <root>/airflow/dags/this.py; container: /opt/airflow/dags/this.py. Use the first parent holding scripts/.
+PROJECT_ROOT = next(p for p in Path(__file__).resolve().parents if (p / "scripts").is_dir())
 SCRIPTS_DIR = PROJECT_ROOT / "scripts"
 SRC_DIR = PROJECT_ROOT / "src"
 
@@ -86,7 +87,7 @@ def run_member2_etl(**context):
         sys.executable,
         str(SCRIPTS_DIR / "run_lakehouse_etl.py"),
         "--mode", "batch",
-        "--format", "parquet",
+        "--format", "csv",  # input is the PaySim CSV (dataset/paysim.csv)
         "--bronze-mode", "append",
         "--silver-mode", "append",
         "--gold-mode", "overwrite",
@@ -164,6 +165,30 @@ def run_member3_inference(**context):
     return {"status": "success", "step": "inference"}
 
 
+def run_member5_load(**context):
+    """
+    Member 5: Load fraud predictions into Postgres for the API
+    """
+    logger.info("Starting Member 5: Load predictions into Postgres")
+
+    cmd = [
+        sys.executable,
+        str(SCRIPTS_DIR / "load_predictions_to_postgres.py"),
+        "--input-path", "data/gold/fraud_predictions",
+        "--run-id", context["run_id"],
+    ]
+
+    # cwd=PROJECT_ROOT so the scripts' relative paths (data/, models/) resolve correctly
+    result = subprocess.run(cmd, capture_output=True, text=True, cwd=PROJECT_ROOT)
+
+    if result.returncode != 0:
+        logger.error(f"Load failed: {result.stderr}")
+        raise Exception("Member 5 load failed")
+
+    logger.info(result.stdout)
+    return {"status": "success", "step": "serving_load"}
+
+
 def check_pipeline_health(**context):
     """
     Final health check: Verify all layers and predictions exist
@@ -225,19 +250,26 @@ with dag:
         doc='Run ML model on enriched transactions',
     )
 
-    # Task 5: Health Check
+    # Task 5: Member 5 Serving load
+    load_task = PythonOperator(
+        task_id='member5_load_predictions',
+        python_callable=run_member5_load,
+        doc='Load fraud predictions into Postgres for the API',
+    )
+
+    # Task 6: Health Check
     health_check_task = PythonOperator(
         task_id='pipeline_health_check',
         python_callable=check_pipeline_health,
         doc='Verify all outputs exist and pipeline succeeded',
     )
 
-    # Task 6: Success notification
+    # Task 7: Success notification
     success_task = BashOperator(
         task_id='pipeline_success',
         bash_command='echo "✅ Fraud Detection Pipeline completed successfully at $(date)"',
     )
 
     # ==================== DEPENDENCIES ====================
-    # Sequential: Ingest → ETL → Quality → Inference → Health → Success
-    ingest_task >> etl_task >> quality_task >> inference_task >> health_check_task >> success_task
+    # Sequential: Ingest → ETL → Quality → Inference → Load → Health → Success
+    ingest_task >> etl_task >> quality_task >> inference_task >> load_task >> health_check_task >> success_task
