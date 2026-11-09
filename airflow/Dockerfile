@@ -1,15 +1,11 @@
 FROM apache/airflow:2.7.2-python3.11
 
 # PySpark needs a Java runtime (Member 2 ETL + Member 3 inference + quality checks)
-USER root
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends openjdk-17-jdk-headless \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
-
-# Stable JAVA_HOME regardless of CPU architecture (amd64 / arm64)
-RUN ln -s /usr/lib/jvm/java-17-openjdk-$(dpkg --print-architecture) /usr/lib/jvm/java-17
+# Java is copied from the official Temurin image: the base image is Debian bullseye,
+# whose apt repos are retired, so apt-get install no longer works. Multi-arch (amd64 / arm64).
+COPY --from=eclipse-temurin:17-jre /opt/java/openjdk /usr/lib/jvm/java-17
 ENV JAVA_HOME=/usr/lib/jvm/java-17
+ENV PATH="${JAVA_HOME}/bin:${PATH}"
 
 USER airflow
 
