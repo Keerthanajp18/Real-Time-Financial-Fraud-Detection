@@ -88,8 +88,9 @@ def run_member2_etl(**context):
         str(SCRIPTS_DIR / "run_lakehouse_etl.py"),
         "--mode", "batch",
         "--format", "csv",  # input is the PaySim CSV (dataset/paysim.csv)
-        "--bronze-mode", "append",
-        "--silver-mode", "append",
+        # Batch mode re-reads the whole CSV, so append would duplicate every row on a retry or rerun
+        "--bronze-mode", "overwrite",
+        "--silver-mode", "overwrite",
         "--gold-mode", "overwrite",
     ]
 
