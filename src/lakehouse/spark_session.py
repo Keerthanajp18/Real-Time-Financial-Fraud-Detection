@@ -3,6 +3,7 @@ import sys
 import platform
 from pathlib import Path
 from typing import Optional
+import pyspark
 from pyspark.sql import SparkSession
 from src.logger import setup_logger
 
@@ -96,7 +97,8 @@ def get_spark_session(
         # Include Kafka Structured Streaming connector package
         builder = builder.config(
             "spark.jars.packages",
-            "org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0"
+            # Connector version must match Spark; Spark 4 is built for Scala 2.13 only
+            f"org.apache.spark:spark-sql-kafka-0-10_2.13:{pyspark.__version__}"
         )
 
     if extra_configs:
