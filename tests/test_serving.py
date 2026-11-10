@@ -153,6 +153,17 @@ def test_stats_without_model_config(db_url, tmp_path, monkeypatch):
     assert response.json()["model"] is None
 
 
+def test_stats_reports_failed_run(db_url, tmp_path):
+    from src.serving.api import app
+
+    with pytest.raises(Exception):
+        load_predictions(db_url, str(tmp_path / "missing"), dag_run_id="run-bad")
+    body = TestClient(app).get("/stats").json()
+    assert body["total"] == 0
+    assert body["runs"][0]["status"] == "failed"
+    assert body["runs"][0]["error"]
+
+
 def test_api_returns_503_before_first_load(db_url):
     from src.serving.api import app
 
