@@ -6,135 +6,146 @@
 <title>Fraud Detection Platform</title>
 <!-- Member 5 demo dashboard. Self-contained: no CDN, works offline. Data from /stats, /alerts, /transactions. -->
 <style>
+  /* Minimal palette: neutral ink and surfaces, one violet accent for data, red only for fraud */
   :root {
-    --bg: #f4f4f2; --card: #fcfcfb; --border: #e4e3de; --track: #ecebe6;
-    --text: #0b0b0b; --text-2: #52514e; --text-3: #6b6a66;
-    --accent: #2a78d6; --accent-soft: #cde2fb;
+    --bg: #f7f7f5; --card: #ffffff; --border: #e9e8e4; --track: #f0efeb;
+    --text: #18181b; --text-2: #52525b; --text-3: #71717a;
+    --accent: #6250d6; --accent-ink: #ffffff; --accent-tint: #f1effd;
     --good: #0ca30c; --warning: #b77f00; --critical: #d03b3b;
-    --shadow: 0 1px 2px rgba(0,0,0,.04), 0 2px 8px rgba(0,0,0,.04);
     color-scheme: light;
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      --bg: #111110; --card: #1a1a19; --border: #2d2d2a; --track: #2a2a27;
-      --text: #f0efec; --text-2: #c3c2b7; --text-3: #9d9c94;
-      --accent: #3987e5; --accent-soft: #184f95;
+      --bg: #0c0c0d; --card: #141416; --border: #26262a; --track: #1f1f23;
+      --text: #f4f4f5; --text-2: #b4b4bb; --text-3: #8b8b94;
+      --accent: #9085e9; --accent-ink: #0c0c0d; --accent-tint: #1d1a33;
       --good: #0ca30c; --warning: #fab219; --critical: #e66767;
-      --shadow: none;
       color-scheme: dark;
     }
   }
   * { box-sizing: border-box; }
   body {
     margin: 0; background: var(--bg); color: var(--text);
-    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font: 15px/1.55 system-ui, -apple-system, "Segoe UI Variable Text", "Segoe UI", Roboto, sans-serif;
     -webkit-font-smoothing: antialiased;
   }
-  .wrap { max-width: 1180px; margin: 0 auto; padding: 28px 24px 48px; }
+  .wrap { max-width: 1160px; margin: 0 auto; padding: 40px 24px 56px; }
   .num { font-variant-numeric: tabular-nums; }
-  .mono { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: 13px; }
+  .mono { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: 12.5px; }
   .muted { color: var(--text-3); }
-  h1 { font-size: 22px; font-weight: 650; margin: 0; letter-spacing: -.01em; }
-  h2 { font-size: 13px; font-weight: 600; margin: 0 0 14px; color: var(--text-2);
-       text-transform: uppercase; letter-spacing: .06em; }
+  h1 { font-size: 26px; font-weight: 600; margin: 0; letter-spacing: -.02em; }
+  h2 { font-size: 12px; font-weight: 600; margin: 0 0 18px; color: var(--text-3);
+       text-transform: uppercase; letter-spacing: .08em; }
   a { color: var(--accent); text-decoration: none; }
-  a:hover { text-decoration: underline; }
+  a:hover { text-decoration: underline; text-underline-offset: 3px; }
 
-  header { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 24px; }
-  header p { margin: 2px 0 0; color: var(--text-2); font-size: 14px; }
+  header { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; margin-bottom: 28px; }
+  .eyebrow { font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); margin-bottom: 6px; }
+  header p { margin: 4px 0 0; color: var(--text-2); font-size: 14px; }
   .pill { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px;
-          background: var(--card); border: 1px solid var(--border); font-size: 13px; color: var(--text-2); }
-  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text-3); flex: none; }
+          border: 1px solid var(--border); background: var(--card); font-size: 13px; color: var(--text-2); }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text-3); flex: none; }
   .dot.good { background: var(--good); } .dot.critical { background: var(--critical); } .dot.warning { background: var(--warning); }
 
-  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; box-shadow: var(--shadow); }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 24px; }
   section { margin-bottom: 16px; }
 
-  /* Pipeline strip */
-  .pipeline { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 0; }
-  .stage { position: relative; padding: 0 8px; text-align: center; }
+  /* Pipeline strip: thin rail, small status dots, numbered stages */
+  .pipeline { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); }
+  .stage { position: relative; padding: 0 6px; text-align: center; }
+  .stage .idx { font-size: 11px; color: var(--text-3); margin-bottom: 8px; }
   .stage:not(:last-child)::after {
-    content: ""; position: absolute; top: 15px; left: calc(50% + 18px); right: calc(-50% + 18px);
-    height: 2px; background: var(--border);
+    content: ""; position: absolute; top: 31px; left: calc(50% + 10px); right: calc(-50% + 10px);
+    height: 1px; background: var(--border);
   }
-  .stage .node { width: 32px; height: 32px; margin: 0 auto 10px; border-radius: 50%; display: grid; place-items: center;
-                 font-size: 15px; font-weight: 700; color: #fff; background: var(--text-3); }
+  .stage .node { width: 9px; height: 9px; margin: 0 auto 14px; border-radius: 50%; background: var(--text-3);
+                 box-shadow: 0 0 0 4px var(--card); }
   .stage .node.good { background: var(--good); } .stage .node.critical { background: var(--critical); }
   .stage .node.warning { background: var(--warning); }
   .stage .name { font-weight: 600; font-size: 14px; }
   .stage .tech { font-size: 12px; color: var(--text-2); }
   .stage .owner { font-size: 11px; color: var(--text-3); margin-top: 2px; }
-  .stage .count { font-size: 12px; color: var(--text); margin-top: 4px; font-weight: 600; }
-  .runline { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border); font-size: 13px; color: var(--text-2);
-             display: flex; gap: 6px 20px; flex-wrap: wrap; overflow-wrap: anywhere; }
+  .stage .count { display: inline-block; margin-top: 8px; padding: 1px 8px; border-radius: 999px; font-size: 11.5px;
+                  font-weight: 600; color: var(--accent); background: var(--accent-tint); }
+  .runline { margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--border); font-size: 13px; color: var(--text-2);
+             display: flex; gap: 6px 24px; flex-wrap: wrap; overflow-wrap: anywhere; }
   .runline b { color: var(--text); font-weight: 600; }
   .runerror { color: var(--critical); }
 
-  /* KPI tiles */
-  .kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+  /* Headline numbers: one card, four columns split by hairlines */
+  .kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); padding: 0; }
+  .kpi { padding: 22px 24px; }
+  .kpi + .kpi { border-left: 1px solid var(--border); }
   .kpi .label { font-size: 13px; color: var(--text-2); }
-  .kpi .value { font-size: 32px; font-weight: 650; letter-spacing: -.02em; line-height: 1.2; margin-top: 4px; }
-  .kpi .sub { font-size: 12px; color: var(--text-3); margin-top: 2px; }
+  .kpi .value { font-size: 34px; font-weight: 500; letter-spacing: -.03em; line-height: 1.15; margin-top: 6px; }
+  .kpi .sub { font-size: 12px; color: var(--text-3); margin-top: 4px; }
 
   .two { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 16px; }
 
   /* Flagged-by-type bars: single series, one hue, rounded data-end anchored at the baseline */
-  .bars { display: grid; gap: 10px; }
-  .bar-row { display: grid; grid-template-columns: 92px 1fr 64px; align-items: center; gap: 12px; padding: 2px 0; cursor: default; }
+  .bars { display: grid; gap: 14px; }
+  .bar-row { display: grid; grid-template-columns: 88px 1fr 56px; align-items: center; gap: 14px; cursor: default; }
   .bar-row .type { font-size: 13px; color: var(--text-2); }
-  .bar-row .track { height: 20px; position: relative; }
-  .bar-row .fill { position: absolute; inset: 0 auto 0 0; background: var(--accent); border-radius: 0 4px 4px 0; min-width: 2px; }
+  .bar-row .track { height: 10px; position: relative; background: var(--track); border-radius: 5px; }
+  .bar-row .fill { position: absolute; inset: 0 auto 0 0; background: var(--accent); border-radius: 5px; min-width: 3px; }
   .bar-row .val { font-size: 13px; text-align: right; }
-  .bar-row:hover .fill { filter: brightness(1.1); }
-  .axis-note { font-size: 12px; color: var(--text-3); margin-top: 12px; }
+  .bar-row:hover .fill, .bar-row:focus .fill { filter: brightness(1.12); }
+  .bar-row:focus { outline: none; } .bar-row:focus-visible .type { color: var(--accent); }
+  .axis-note { font-size: 12px; color: var(--text-3); margin-top: 18px; }
 
   /* Lookup */
   .lookup form { display: flex; gap: 8px; }
-  input[type=text] { flex: 1; min-width: 0; padding: 9px 12px; border-radius: 8px; border: 1px solid var(--border);
+  input[type=text] { flex: 1; min-width: 0; padding: 10px 14px; border-radius: 10px; border: 1px solid var(--border);
                      background: var(--bg); color: var(--text); font: inherit; font-size: 14px; }
-  input[type=text]:focus, button:focus-visible, input[type=range]:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-  button { padding: 9px 16px; border-radius: 8px; border: 0; background: var(--accent); color: #fff; font: inherit;
+  input[type=text]::placeholder { color: var(--text-3); }
+  input[type=text]:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-tint); }
+  button:focus-visible, input[type=range]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  button { padding: 10px 18px; border-radius: 10px; border: 0; background: var(--accent); color: var(--accent-ink); font: inherit;
            font-size: 14px; font-weight: 600; cursor: pointer; }
-  .result { margin-top: 16px; font-size: 14px; }
-  .result dl { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; margin: 0; }
-  .result dt { color: var(--text-2); } .result dd { margin: 0; overflow-wrap: anywhere; }
+  button:hover { filter: brightness(1.08); }
+  .result { margin-top: 18px; font-size: 14px; }
+  .result dl { display: grid; grid-template-columns: auto 1fr; gap: 8px 18px; margin: 0; }
+  .result dt { color: var(--text-3); } .result dd { margin: 0; overflow-wrap: anywhere; }
   .verdict { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; }
   .verdict.fraud { color: var(--critical); } .verdict.ok { color: var(--good); }
-  .hint { font-size: 13px; color: var(--text-3); margin-top: 10px; }
+  .hint { font-size: 13px; color: var(--text-3); margin-top: 14px; }
 
   /* Alerts table */
-  .table-head { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 14px; }
+  .table-head { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; }
   .table-head h2 { margin: 0; }
-  .slider { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--text-2); }
+  .slider { display: flex; align-items: center; gap: 12px; font-size: 13px; color: var(--text-2); }
   .slider input { width: 180px; accent-color: var(--accent); }
-  .slider output { min-width: 40px; font-weight: 600; color: var(--text); }
-  .scroll { max-height: 460px; overflow: auto; margin: 0 -20px -20px; }
+  .slider output { min-width: 36px; font-weight: 600; color: var(--text); }
+  .scroll { max-height: 460px; overflow: auto; margin: 0 -24px -24px; }
   table { width: 100%; border-collapse: collapse; font-size: 14px; }
-  th { position: sticky; top: 0; background: var(--card); text-align: left; font-weight: 600; font-size: 12px;
-       color: var(--text-2); padding: 8px 20px; border-bottom: 1px solid var(--border); }
-  td { padding: 9px 20px; border-bottom: 1px solid var(--border); }
-  tbody tr { cursor: pointer; }
-  tbody tr:hover { background: var(--bg); }
+  th { position: sticky; top: 0; background: var(--card); text-align: left; font-weight: 500; font-size: 12px;
+       color: var(--text-3); padding: 10px 24px; border-bottom: 1px solid var(--border); }
+  td { padding: 11px 24px; border-bottom: 1px solid var(--border); }
+  tbody tr:last-child td { border-bottom: 0; }
+  tbody tr { cursor: pointer; transition: background .12s; }
+  tbody tr:hover { background: var(--accent-tint); }
   th.r, td.r { text-align: right; }
-  .prob { display: flex; align-items: center; gap: 10px; justify-content: flex-end; }
-  .prob .track { width: 90px; height: 6px; border-radius: 3px; background: var(--track); overflow: hidden; }
-  .prob .fill { height: 100%; background: var(--accent); border-radius: 3px; }
-  .badge { display: inline-block; padding: 1px 8px; border-radius: 6px; font-size: 12px; background: var(--track); color: var(--text-2); }
+  .prob { display: flex; align-items: center; gap: 12px; justify-content: flex-end; }
+  .prob .track { width: 88px; height: 4px; border-radius: 2px; background: var(--track); overflow: hidden; }
+  .prob .fill { height: 100%; background: var(--accent); border-radius: 2px; }
+  .badge { font-size: 12px; color: var(--text-2); letter-spacing: .02em; }
 
-  .banner { display: none; margin-bottom: 16px; padding: 12px 16px; border-radius: 10px; font-size: 14px;
+  .banner { display: none; margin-bottom: 16px; padding: 12px 16px; border-radius: 12px; font-size: 14px;
             border: 1px solid var(--critical); color: var(--critical); background: var(--card); }
   .banner.show { display: block; }
-  footer { display: flex; gap: 20px; flex-wrap: wrap; font-size: 13px; color: var(--text-3); margin-top: 24px; }
+  footer { display: flex; gap: 22px; flex-wrap: wrap; font-size: 13px; color: var(--text-3); margin-top: 28px; }
 
   #tip { position: fixed; pointer-events: none; z-index: 10; padding: 8px 10px; border-radius: 8px; font-size: 12px;
          background: var(--text); color: var(--card); opacity: 0; transition: opacity .1s; max-width: 260px; }
   #tip.show { opacity: 1; }
 
   @media (max-width: 900px) {
-    .wrap { padding: 20px 16px 40px; }
-    .pipeline { grid-template-columns: repeat(4, minmax(0, 1fr)); row-gap: 20px; }
+    .wrap { padding: 24px 16px 40px; }
+    .pipeline { grid-template-columns: repeat(4, minmax(0, 1fr)); row-gap: 24px; }
     .stage:nth-child(4)::after { display: none; }
     .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .kpi:nth-child(3) { border-left: 0; }
+    .kpi:nth-child(n+3) { border-top: 1px solid var(--border); }
     .two { grid-template-columns: minmax(0, 1fr); }
   }
   @media (max-width: 520px) {
@@ -149,6 +160,7 @@
 <div class="wrap">
   <header>
     <div>
+      <div class="eyebrow">Fraud monitoring</div>
       <h1>Fraud Detection Platform</h1>
       <p>Real-time pipeline on the PaySim mobile-money dataset</p>
     </div>
@@ -163,7 +175,7 @@
     <div class="runline" id="runline"></div>
   </section>
 
-  <section class="kpis" id="kpis"></section>
+  <section class="card kpis" id="kpis"></section>
 
   <section class="two">
     <div class="card">
@@ -270,8 +282,9 @@ function renderPipeline(stats) {
   const run = stats.runs[0];
   const kind = !run ? "" : run.status === "success" ? "good" : run.status === "failed" ? "critical" : "warning";
   const icon = !run ? "·" : run.status === "success" ? "✓" : run.status === "failed" ? "✕" : "…";
-  $("pipeline").replaceChildren(...STAGES.map((s) => el("div", { class: "stage" },
-    el("div", { class: `node ${kind}`, text: icon, "aria-hidden": "true" }),
+  $("pipeline").replaceChildren(...STAGES.map((s, i) => el("div", { class: "stage" },
+    el("div", { class: "idx mono", text: String(i + 1).padStart(2, "0") }),
+    el("div", { class: `node ${kind}`, "aria-hidden": "true" }),
     el("div", { class: "name", text: s.name }),
     el("div", { class: "tech", text: s.tech }),
     el("div", { class: "owner", text: s.owner }),
@@ -293,7 +306,7 @@ function renderPipeline(stats) {
 }
 
 function kpi(label, value, sub) {
-  return el("div", { class: "card kpi" },
+  return el("div", { class: "kpi" },
     el("div", { class: "label", text: label }),
     el("div", { class: "value num", text: value }),
     sub ? el("div", { class: "sub", text: sub }) : null);
