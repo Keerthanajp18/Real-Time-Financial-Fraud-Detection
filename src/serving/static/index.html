@@ -227,7 +227,14 @@ function el(tag, props = {}, ...children) {
 }
 
 async function getJSON(url) {
-  const res = await fetch(url);
+  let res;
+  try {
+    res = await fetch(url);
+  } catch {
+    // Network failure: the API itself is down, not the database behind it
+    setStatus("critical", "API offline");
+    throw Object.assign(new Error("API unreachable. Start it with \"docker compose up -d\"."), { status: 0 });
+  }
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw Object.assign(new Error(body.detail || `HTTP ${res.status}`), { status: res.status });
   return body;
@@ -395,8 +402,9 @@ async function init() {
   try {
     await getJSON("/health");
   } catch (err) {
-    setStatus("critical", "API offline");
-    showBanner(`Cannot reach the database: ${err.message}. Start it with "docker compose up -d".`);
+    setStatus("critical", err.status === 0 ? "API offline" : "Database offline");
+    showBanner(err.status === 0 ? err.message
+      : `Cannot reach the database: ${err.message}. Start it with "docker compose up -d".`);
     return;
   }
   try {
