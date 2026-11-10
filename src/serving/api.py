@@ -5,6 +5,7 @@ Run locally:  uvicorn src.serving.api:app --reload
 Docs:         http://localhost:8000/docs
 """
 
+import json
 import os
 from typing import Optional
 
@@ -80,3 +81,39 @@ def get_alerts(
             params,
         )
         return cur.fetchall()
+
+
+# Relative to the working directory: /app in the API container, the repo root locally
+MODEL_CONFIG_PATH = "models/member3/model_config.json"
+
+
+@app.get("/stats")
+def get_stats(conn=Depends(get_conn)):
+    """Totals, flagged counts per type, recent load runs and model metrics, for the dashboard."""
+    with conn.cursor() as cur:
+        # One scan of fraud_predictions: about 0.4 s on the 6.36M-row PaySim set
+        cur.execute(
+            "SELECT type, count(*) AS total, sum(fraud_prediction)::int AS flagged "
+            "FROM fraud_predictions GROUP BY type ORDER BY flagged DESC, type"
+        )
+        by_type = cur.fetchall()
+        cur.execute(
+            "SELECT run_id, dag_run_id, status, rows_loaded, error, started_at, finished_at "
+            "FROM pipeline_runs ORDER BY run_id DESC LIMIT 5"
+        )
+        runs = cur.fetchall()
+    try:
+        with open(MODEL_CONFIG_PATH, encoding="utf-8") as f:
+            config = json.load(f)
+        model = {k: config.get(k) for k in
+                 ("model_type", "threshold", "test_precision", "test_recall", "test_f1")}
+    except (OSError, ValueError):
+        model = None  # API started without the models/ mount
+    return {
+        "total": sum(r["total"] for r in by_type),
+        "flagged": sum(r["flagged"] for r in by_type),
+        "by_type": by_type,
+        "runs": runs,
+        "model": model,
+        "airflow_url": os.getenv("AIRFLOW_UI_URL", "http://localhost:8081"),
+    }
