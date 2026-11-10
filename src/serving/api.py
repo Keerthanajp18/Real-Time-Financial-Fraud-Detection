@@ -7,11 +7,12 @@ Docs:         http://localhost:8000/docs
 
 import json
 import os
+from pathlib import Path
 from typing import Optional
 
 import psycopg2
 from fastapi import Depends, FastAPI, HTTPException, Query
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 from psycopg2.errors import UndefinedTable
 from psycopg2.extras import RealDictCursor
 
@@ -44,6 +45,14 @@ def get_conn():
         yield conn
     finally:
         conn.close()
+
+
+DASHBOARD = Path(__file__).parent / "static" / "index.html"
+
+
+@app.get("/", include_in_schema=False)
+def dashboard():
+    return FileResponse(DASHBOARD)
 
 
 @app.get("/health")

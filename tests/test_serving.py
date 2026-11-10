@@ -185,3 +185,12 @@ def test_api_returns_503_when_db_down(monkeypatch):
 
     monkeypatch.setenv("FRAUD_DB_URL", "postgresql://u:p@127.0.0.1:1/none")
     assert TestClient(app).get("/health").status_code == 503
+
+
+def test_dashboard_page():
+    from src.serving.api import app
+
+    response = TestClient(app).get("/")
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/html")
+    assert "Fraud Detection" in response.text
