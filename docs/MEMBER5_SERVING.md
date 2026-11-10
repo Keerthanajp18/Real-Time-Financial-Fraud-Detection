@@ -154,3 +154,24 @@ row per `transaction_id`.
 - **Known limit:** streaming ETL loads `spark-sql-kafka-0-10_2.12:3.5.0`
   (`src/lakehouse/spark_session.py`), which does not match Spark 4. The DAG only runs
   batch ETL, so it is not affected.
+
+## Verified on the full PaySim dataset
+
+On 2026-11-10 the whole DAG ran on the real PaySim CSV (6,362,620 rows, 8,213 frauds).
+All 7 tasks succeeded in about 24 minutes.
+
+| Stage | Result |
+|-------|--------|
+| Bronze / Silver / Gold | 6,362,620 rows each |
+| Inference | 7,598 transactions flagged at threshold 0.4 |
+| Postgres load | 6,362,620 rows in 3 min 29 s, run logged as `success` |
+| `/alerts` | Returns the flagged transactions, highest probability (0.997) first |
+
+Against the `isFraud` label: 5,938 true positives, 1,660 false positives, 2,275 missed
+frauds. Precision 0.782, recall 0.723, F1 0.751. This set includes the model's training
+rows, so the held-out test scores (precision 0.773, recall 0.726, F1 0.749) are the fair numbers.
+
+**Memory:** the run needs more than the default Docker Desktop memory on a 16 GB laptop.
+At 7.6 GB, with other containers running, the Docker VM ran out of memory and killed
+every container. It passed with `memory=11GB` and `swap=8GB` in `%USERPROFILE%\.wslconfig`.
+The Airflow scheduler peaked at 2.9 GiB.
