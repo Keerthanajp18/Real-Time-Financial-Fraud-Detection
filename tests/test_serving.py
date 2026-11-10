@@ -122,6 +122,48 @@ def test_api_endpoints(db_url, tmp_path):
     assert client.get("/alerts", params={"min_probability": 2}).status_code == 422
 
 
+def test_stats(db_url, tmp_path):
+    from src.serving.api import app
+
+    src = write_predictions(
+        tmp_path / "p",
+        [prediction("low", 0.1, threshold=0.4), prediction("edge", 0.42, threshold=0.4),
+         prediction("high", 0.95, threshold=0.4)],
+    )
+    load_predictions(db_url, src, dag_run_id="run-1")
+    body = TestClient(app).get("/stats").json()
+
+    assert body["total"] == 3
+    assert body["flagged"] == 2
+    assert body["by_type"] == [{"type": "TRANSFER", "total": 3, "flagged": 2}]
+    assert body["runs"][0]["status"] == "success"
+    assert body["runs"][0]["rows_loaded"] == 3
+    assert body["runs"][0]["dag_run_id"] == "run-1"
+    assert "airflow_url" in body
+    assert "model" in body
+
+
+def test_stats_without_model_config(db_url, tmp_path, monkeypatch):
+    from src.serving.api import app
+
+    load_predictions(db_url, write_predictions(tmp_path / "p", [prediction("a", 0.9)]))
+    monkeypatch.chdir(tmp_path)  # model config path is relative, so it is not found here
+    response = TestClient(app).get("/stats")
+    assert response.status_code == 200
+    assert response.json()["model"] is None
+
+
+def test_stats_reports_failed_run(db_url, tmp_path):
+    from src.serving.api import app
+
+    with pytest.raises(Exception):
+        load_predictions(db_url, str(tmp_path / "missing"), dag_run_id="run-bad")
+    body = TestClient(app).get("/stats").json()
+    assert body["total"] == 0
+    assert body["runs"][0]["status"] == "failed"
+    assert body["runs"][0]["error"]
+
+
 def test_api_returns_503_before_first_load(db_url):
     from src.serving.api import app
 
@@ -130,6 +172,7 @@ def test_api_returns_503_before_first_load(db_url):
     response = client.get("/alerts")
     assert response.status_code == 503
     assert response.json() == {"detail": "No predictions loaded yet"}
+    assert client.get("/stats").status_code == 503
 
 
 def test_api_creates_missing_database(db_url, monkeypatch):
@@ -153,3 +196,12 @@ def test_api_returns_503_when_db_down(monkeypatch):
 
     monkeypatch.setenv("FRAUD_DB_URL", "postgresql://u:p@127.0.0.1:1/none")
     assert TestClient(app).get("/health").status_code == 503
+
+
+def test_dashboard_page():
+    from src.serving.api import app
+
+    response = TestClient(app).get("/")
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/html")
+    assert "Fraud Detection" in response.text
