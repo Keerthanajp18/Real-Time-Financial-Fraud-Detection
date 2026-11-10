@@ -111,7 +111,7 @@ services:
     container_name: fraud-platform-airflow-webserver
     command: webserver
     ports:
-      - "8081:8080"
+      - "${AIRFLOW_WEB_PORT:-8081}:8080"  # set AIRFLOW_WEB_PORT if 8081 is taken
     depends_on:
       postgres:
         condition: service_healthy
