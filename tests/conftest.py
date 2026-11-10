@@ -1,8 +1,10 @@
 import csv
 import tempfile
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, Generator, List
 import pytest
+from src.lakehouse.config import LakehouseConfig
+from src.lakehouse.spark_session import get_spark_session, stop_spark_session
 
 
 @pytest.fixture
@@ -96,4 +98,57 @@ def synthetic_csv_file(tmp_path: Path) -> Path:
         writer.writerow(headers)
         writer.writerows(rows)
 
+    return file_path
+
+
+@pytest.fixture(scope="session")
+def spark_session() -> Generator:
+    """
+    Session-scoped PySpark fixture for Lakehouse testing.
+    Reuses a single local Spark context across tests for speed.
+    """
+    spark = get_spark_session(
+        app_name="TestFraudLakehouse",
+        master="local[2]",
+    )
+    yield spark
+    stop_spark_session(spark)
+
+
+@pytest.fixture
+def temp_lakehouse_config(tmp_path: Path) -> LakehouseConfig:
+    """
+    Provides an isolated Lakehouse configuration pointing to temporary test directories.
+    Ensures tests never pollute or overwrite actual workspace data.
+    """
+    base_dir = tmp_path / "test_lakehouse"
+    base_dir.mkdir(parents=True, exist_ok=True)
+    return LakehouseConfig(
+        data_dir=str(base_dir),
+        bronze_dir=str(base_dir / "bronze" / "transactions"),
+        silver_dir=str(base_dir / "silver" / "transactions"),
+        quarantine_dir=str(base_dir / "quarantine" / "transactions"),
+        gold_dir=str(base_dir / "gold"),
+        checkpoint_dir=str(base_dir / "checkpoints"),
+        partition_by_step=False,  # Unpartitioned for fast test verification
+    )
+
+
+@pytest.fixture
+def synthetic_duplicates_csv(tmp_path: Path) -> Path:
+    """
+    Creates a CSV containing 4 identical duplicate rows to verify deduplication.
+    """
+    file_path = tmp_path / "synthetic_duplicates.csv"
+    headers = [
+        "step", "type", "amount", "nameOrig", "oldbalanceOrg",
+        "newbalanceOrig", "nameDest", "oldbalanceDest", "newbalanceDest",
+        "isFraud", "isFlaggedFraud"
+    ]
+    row = [1, "TRANSFER", 1000.0, "C1001", 2000.0, 1000.0, "C2001", 0.0, 1000.0, 0, 0]
+    with open(file_path, mode="w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow(headers)
+        for _ in range(4):
+            writer.writerow(row)
     return file_path
