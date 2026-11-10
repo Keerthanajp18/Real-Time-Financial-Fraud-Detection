@@ -1,0 +1,439 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fraud Detection Platform</title>
+<!-- Member 5 demo dashboard. Self-contained: no CDN, works offline. Data from /stats, /alerts, /transactions. -->
+<style>
+  /* Minimal palette: neutral ink and surfaces, one violet accent for data, red only for fraud */
+  :root {
+    --bg: #f7f7f5; --card: #ffffff; --border: #e9e8e4; --track: #f0efeb;
+    --text: #18181b; --text-2: #52525b; --text-3: #71717a;
+    --accent: #6250d6; --accent-ink: #ffffff; --accent-tint: #f1effd;
+    --good: #0ca30c; --warning: #b77f00; --critical: #d03b3b;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0c0c0d; --card: #141416; --border: #26262a; --track: #1f1f23;
+      --text: #f4f4f5; --text-2: #b4b4bb; --text-3: #8b8b94;
+      --accent: #9085e9; --accent-ink: #0c0c0d; --accent-tint: #1d1a33;
+      --good: #0ca30c; --warning: #fab219; --critical: #e66767;
+      color-scheme: dark;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.55 system-ui, -apple-system, "Segoe UI Variable Text", "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1160px; margin: 0 auto; padding: 40px 24px 56px; }
+  .num { font-variant-numeric: tabular-nums; }
+  .mono { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: 12.5px; }
+  .muted { color: var(--text-3); }
+  h1 { font-size: 26px; font-weight: 600; margin: 0; letter-spacing: -.02em; }
+  h2 { font-size: 12px; font-weight: 600; margin: 0 0 18px; color: var(--text-3);
+       text-transform: uppercase; letter-spacing: .08em; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; text-underline-offset: 3px; }
+
+  header { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; margin-bottom: 28px; }
+  .eyebrow { font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); margin-bottom: 6px; }
+  header p { margin: 4px 0 0; color: var(--text-2); font-size: 14px; }
+  .pill { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px;
+          border: 1px solid var(--border); background: var(--card); font-size: 13px; color: var(--text-2); }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text-3); flex: none; }
+  .dot.good { background: var(--good); } .dot.critical { background: var(--critical); } .dot.warning { background: var(--warning); }
+
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 24px; }
+  section { margin-bottom: 16px; }
+
+  /* Pipeline strip: thin rail, small status dots, numbered stages */
+  .pipeline { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); }
+  .stage { position: relative; padding: 0 6px; text-align: center; }
+  .stage .idx { font-size: 11px; color: var(--text-3); margin-bottom: 8px; }
+  .stage:not(:last-child)::after {
+    content: ""; position: absolute; top: 31px; left: calc(50% + 10px); right: calc(-50% + 10px);
+    height: 1px; background: var(--border);
+  }
+  .stage .node { width: 9px; height: 9px; margin: 0 auto 14px; border-radius: 50%; background: var(--text-3);
+                 box-shadow: 0 0 0 4px var(--card); }
+  .stage .node.good { background: var(--good); } .stage .node.critical { background: var(--critical); }
+  .stage .node.warning { background: var(--warning); }
+  .stage .name { font-weight: 600; font-size: 14px; }
+  .stage .tech { font-size: 12px; color: var(--text-2); }
+  .stage .owner { font-size: 11px; color: var(--text-3); margin-top: 2px; }
+  .stage .count { display: inline-block; margin-top: 8px; padding: 1px 8px; border-radius: 999px; font-size: 11.5px;
+                  font-weight: 600; color: var(--accent); background: var(--accent-tint); }
+  .runline { margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--border); font-size: 13px; color: var(--text-2);
+             display: flex; gap: 6px 24px; flex-wrap: wrap; overflow-wrap: anywhere; }
+  .runline b { color: var(--text); font-weight: 600; }
+  .runerror { color: var(--critical); }
+
+  /* Headline numbers: one card, four columns split by hairlines */
+  .kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); padding: 0; }
+  .kpi { padding: 22px 24px; }
+  .kpi + .kpi { border-left: 1px solid var(--border); }
+  .kpi .label { font-size: 13px; color: var(--text-2); }
+  .kpi .value { font-size: 34px; font-weight: 500; letter-spacing: -.03em; line-height: 1.15; margin-top: 6px; }
+  .kpi .sub { font-size: 12px; color: var(--text-3); margin-top: 4px; }
+
+  .two { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 16px; }
+
+  /* Flagged-by-type bars: single series, one hue, rounded data-end anchored at the baseline */
+  .bars { display: grid; gap: 14px; }
+  .bar-row { display: grid; grid-template-columns: 88px 1fr 56px; align-items: center; gap: 14px; cursor: default; }
+  .bar-row .type { font-size: 13px; color: var(--text-2); }
+  .bar-row .track { height: 10px; position: relative; background: var(--track); border-radius: 5px; }
+  .bar-row .fill { position: absolute; inset: 0 auto 0 0; background: var(--accent); border-radius: 5px; min-width: 3px; }
+  .bar-row .val { font-size: 13px; text-align: right; }
+  .bar-row:hover .fill, .bar-row:focus .fill { filter: brightness(1.12); }
+  .bar-row:focus { outline: none; } .bar-row:focus-visible .type { color: var(--accent); }
+  .axis-note { font-size: 12px; color: var(--text-3); margin-top: 18px; }
+
+  /* Lookup */
+  .lookup form { display: flex; gap: 8px; }
+  input[type=text] { flex: 1; min-width: 0; padding: 10px 14px; border-radius: 10px; border: 1px solid var(--border);
+                     background: var(--bg); color: var(--text); font: inherit; font-size: 14px; }
+  input[type=text]::placeholder { color: var(--text-3); }
+  input[type=text]:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-tint); }
+  button:focus-visible, input[type=range]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  button { padding: 10px 18px; border-radius: 10px; border: 0; background: var(--accent); color: var(--accent-ink); font: inherit;
+           font-size: 14px; font-weight: 600; cursor: pointer; }
+  button:hover { filter: brightness(1.08); }
+  .result { margin-top: 18px; font-size: 14px; }
+  .result dl { display: grid; grid-template-columns: auto 1fr; gap: 8px 18px; margin: 0; }
+  .result dt { color: var(--text-3); } .result dd { margin: 0; overflow-wrap: anywhere; }
+  .verdict { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; }
+  .verdict.fraud { color: var(--critical); } .verdict.ok { color: var(--good); }
+  .hint { font-size: 13px; color: var(--text-3); margin-top: 14px; }
+
+  /* Alerts table */
+  .table-head { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; }
+  .table-head h2 { margin: 0; }
+  .slider { display: flex; align-items: center; gap: 12px; font-size: 13px; color: var(--text-2); }
+  .slider input { width: 180px; accent-color: var(--accent); }
+  .slider output { min-width: 36px; font-weight: 600; color: var(--text); }
+  .scroll { max-height: 460px; overflow: auto; margin: 0 -24px -24px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th { position: sticky; top: 0; background: var(--card); text-align: left; font-weight: 500; font-size: 12px;
+       color: var(--text-3); padding: 10px 24px; border-bottom: 1px solid var(--border); }
+  td { padding: 11px 24px; border-bottom: 1px solid var(--border); }
+  tbody tr:last-child td { border-bottom: 0; }
+  tbody tr { cursor: pointer; transition: background .12s; }
+  tbody tr:hover { background: var(--accent-tint); }
+  th.r, td.r { text-align: right; }
+  .prob { display: flex; align-items: center; gap: 12px; justify-content: flex-end; }
+  .prob .track { width: 88px; height: 4px; border-radius: 2px; background: var(--track); overflow: hidden; }
+  .prob .fill { height: 100%; background: var(--accent); border-radius: 2px; }
+  .badge { font-size: 12px; color: var(--text-2); letter-spacing: .02em; }
+
+  .banner { display: none; margin-bottom: 16px; padding: 12px 16px; border-radius: 12px; font-size: 14px;
+            border: 1px solid var(--critical); color: var(--critical); background: var(--card); }
+  .banner.show { display: block; }
+  footer { display: flex; gap: 22px; flex-wrap: wrap; font-size: 13px; color: var(--text-3); margin-top: 28px; }
+
+  #tip { position: fixed; pointer-events: none; z-index: 10; padding: 8px 10px; border-radius: 8px; font-size: 12px;
+         background: var(--text); color: var(--card); opacity: 0; transition: opacity .1s; max-width: 260px; }
+  #tip.show { opacity: 1; }
+
+  @media (max-width: 900px) {
+    .wrap { padding: 24px 16px 40px; }
+    .pipeline { grid-template-columns: repeat(4, minmax(0, 1fr)); row-gap: 24px; }
+    .stage:nth-child(4)::after { display: none; }
+    .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .kpi:nth-child(3) { border-left: 0; }
+    .kpi:nth-child(n+3) { border-top: 1px solid var(--border); }
+    .two { grid-template-columns: minmax(0, 1fr); }
+  }
+  @media (max-width: 520px) {
+    .pipeline { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .stage:nth-child(2n)::after { display: none; }
+    .kpi .value { font-size: 26px; }
+    .hide-sm { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <div class="eyebrow">Fraud monitoring</div>
+      <h1>Fraud Detection Platform</h1>
+      <p>Real-time pipeline on the PaySim mobile-money dataset</p>
+    </div>
+    <span class="pill" id="status"><span class="dot"></span><span>Connecting…</span></span>
+  </header>
+
+  <div class="banner" id="banner" role="alert"></div>
+
+  <section class="card">
+    <h2>Pipeline</h2>
+    <div class="pipeline" id="pipeline"></div>
+    <div class="runline" id="runline"></div>
+  </section>
+
+  <section class="card kpis" id="kpis"></section>
+
+  <section class="two">
+    <div class="card">
+      <h2>Flagged by transaction type</h2>
+      <div class="bars" id="bars"></div>
+      <div class="axis-note" id="bars-note"></div>
+    </div>
+    <div class="card lookup">
+      <h2>Look up a transaction</h2>
+      <form id="lookup-form">
+        <label for="lookup-id" class="hide-sm" style="position:absolute;left:-9999px">Transaction ID</label>
+        <input type="text" id="lookup-id" placeholder="Transaction ID" autocomplete="off" spellcheck="false">
+        <button type="submit">Check</button>
+      </form>
+      <div class="result" id="lookup-result"></div>
+      <div class="hint">Tip: click any row in the alerts table to look it up.</div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="table-head">
+      <h2>Fraud alerts</h2>
+      <label class="slider">Min probability
+        <input type="range" id="minp" min="0.4" max="0.99" step="0.01" value="0.9">
+        <output id="minp-out" class="num">0.90</output>
+      </label>
+    </div>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Transaction</th><th>Type</th><th class="r">Amount</th><th class="r hide-sm">Hour</th><th class="r">Fraud probability</th></tr></thead>
+        <tbody id="alerts"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <footer>
+    <a id="link-airflow" href="http://localhost:8081" target="_blank" rel="noopener">Airflow ↗</a>
+    <a href="http://localhost:8080" target="_blank" rel="noopener">Kafka UI ↗</a>
+    <a href="/docs" target="_blank" rel="noopener">API docs ↗</a>
+    <span>Highest-probability alerts first · top 50 shown</span>
+  </footer>
+</div>
+<div id="tip" role="tooltip"></div>
+
+<script>
+const fmt = new Intl.NumberFormat("en-US");
+const money = new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const $ = (id) => document.getElementById(id);
+
+// Build DOM with textContent only: transaction IDs and error text come from the database
+function el(tag, props = {}, ...children) {
+  const node = document.createElement(tag);
+  for (const [k, v] of Object.entries(props)) {
+    if (k === "class") node.className = v;
+    else if (k === "text") node.textContent = v;
+    else if (k === "style") Object.assign(node.style, v);
+    else node.setAttribute(k, v);
+  }
+  for (const c of children) if (c != null) node.append(c);
+  return node;
+}
+
+async function getJSON(url) {
+  let res;
+  try {
+    res = await fetch(url);
+  } catch {
+    // Network failure: the API itself is down, not the database behind it
+    setStatus("critical", "API offline");
+    throw Object.assign(new Error("API unreachable. Start it with \"docker compose up -d\"."), { status: 0 });
+  }
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw Object.assign(new Error(body.detail || `HTTP ${res.status}`), { status: res.status });
+  return body;
+}
+
+function setStatus(kind, text) {
+  $("status").replaceChildren(el("span", { class: `dot ${kind}` }), el("span", { text }));
+}
+function showBanner(text) { $("banner").textContent = text; $("banner").classList.toggle("show", !!text); }
+
+function duration(a, b) {
+  if (!a || !b) return null;
+  const s = Math.round((new Date(b) - new Date(a)) / 1000);
+  return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`;
+}
+function timeOf(iso) {
+  return iso ? new Date(iso).toLocaleString([], { dateStyle: "medium", timeStyle: "short" }) : "—";
+}
+
+// One stage per pipeline step, with the team member who owns it
+const STAGES = [
+  { name: "PaySim CSV", tech: "Source data", owner: "Dataset" },
+  { name: "Kafka", tech: "Streaming ingest", owner: "Member 1" },
+  { name: "Bronze", tech: "Raw · Spark", owner: "Member 2" },
+  { name: "Silver", tech: "Cleaned", owner: "Member 2" },
+  { name: "Gold", tech: "Features", owner: "Member 2" },
+  { name: "GBT model", tech: "Fraud scoring", owner: "Member 3", key: "model" },
+  { name: "Postgres", tech: "Serving store", owner: "Member 5", key: "rows" },
+  { name: "REST API", tech: "FastAPI", owner: "Member 5" },
+];
+
+function renderPipeline(stats) {
+  const run = stats.runs[0];
+  const kind = !run ? "" : run.status === "success" ? "good" : run.status === "failed" ? "critical" : "warning";
+  const icon = !run ? "·" : run.status === "success" ? "✓" : run.status === "failed" ? "✕" : "…";
+  $("pipeline").replaceChildren(...STAGES.map((s, i) => el("div", { class: "stage" },
+    el("div", { class: "idx mono", text: String(i + 1).padStart(2, "0") }),
+    el("div", { class: `node ${kind}`, "aria-hidden": "true" }),
+    el("div", { class: "name", text: s.name }),
+    el("div", { class: "tech", text: s.tech }),
+    el("div", { class: "owner", text: s.owner }),
+    s.key === "model" ? el("div", { class: "count num", text: `${fmt.format(stats.flagged)} flagged` }) : null,
+    s.key === "rows" && run && run.rows_loaded != null ? el("div", { class: "count num", text: `${fmt.format(run.rows_loaded)} rows` }) : null,
+  )));
+
+  const line = $("runline");
+  if (!run) { line.replaceChildren(el("span", { text: "No pipeline run recorded yet." })); return; }
+  const label = { success: "Succeeded", failed: "Failed", running: "Running" }[run.status] || run.status;
+  line.replaceChildren(...[
+    el("span", {}, "Last run ",el("b", { text: `${icon} ${label}` })),
+    el("span", {}, "Finished ", el("b", { text: timeOf(run.finished_at || run.started_at) })),
+    duration(run.started_at, run.finished_at) ? el("span", {}, "Load took ", el("b", { text: duration(run.started_at, run.finished_at) })) : null,
+    el("span", {}, "Orchestrated by ", el("a", { href: stats.airflow_url, target: "_blank", rel: "noopener", text: "Airflow" }),
+      run.dag_run_id ? el("span", { class: "mono muted", text: ` · ${run.dag_run_id}` }) : null),
+    run.error ? el("span", { class: "runerror", text: `Error: ${run.error}` }) : null,
+  ].filter(Boolean));
+}
+
+function kpi(label, value, sub) {
+  return el("div", { class: "kpi" },
+    el("div", { class: "label", text: label }),
+    el("div", { class: "value num", text: value }),
+    sub ? el("div", { class: "sub", text: sub }) : null);
+}
+
+function renderKpis(stats) {
+  const m = stats.model;
+  const rate = stats.total ? (100 * stats.flagged / stats.total) : 0;
+  $("kpis").replaceChildren(
+    kpi("Transactions scored", fmt.format(stats.total), "Every PaySim transaction"),
+    kpi("Flagged as fraud", fmt.format(stats.flagged), m ? `Probability ≥ ${m.threshold}` : null),
+    kpi("Flag rate", `${rate.toFixed(2)}%`, "Of all transactions"),
+    m ? kpi("Model F1 score", m.test_f1.toFixed(3),
+      `Precision ${m.test_precision.toFixed(3)} · Recall ${m.test_recall.toFixed(3)} · ${m.model_type}`)
+      : kpi("Model", "—", "Metrics file not mounted"),
+  );
+}
+
+const tip = $("tip");
+function showTip(e, text) { tip.textContent = text; tip.classList.add("show"); moveTip(e); }
+function moveTip(e) {
+  const x = Math.min(e.clientX + 14, window.innerWidth - tip.offsetWidth - 8);
+  tip.style.left = `${x}px`; tip.style.top = `${e.clientY + 14}px`;
+}
+function hideTip() { tip.classList.remove("show"); }
+
+function renderBars(stats) {
+  const max = Math.max(1, ...stats.by_type.map((t) => t.flagged));
+  $("bars").replaceChildren(...stats.by_type.map((t) => {
+    const rate = t.total ? (100 * t.flagged / t.total) : 0;
+    const text = `${t.type}: ${fmt.format(t.flagged)} flagged of ${fmt.format(t.total)} (${rate.toFixed(2)}%)`;
+    const row = el("div", { class: "bar-row", tabindex: "0", "aria-label": text },
+      el("span", { class: "type", text: t.type }),
+      el("div", { class: "track" }, t.flagged ? el("div", { class: "fill", style: { width: `${100 * t.flagged / max}%` } }) : null),
+      el("span", { class: "val num", text: fmt.format(t.flagged) }));
+    row.addEventListener("mouseenter", (e) => showTip(e, text));
+    row.addEventListener("mousemove", moveTip);
+    row.addEventListener("mouseleave", hideTip);
+    return row;
+  }));
+  const zero = stats.by_type.filter((t) => !t.flagged).map((t) => t.type);
+  $("bars-note").textContent = zero.length ? `No fraud flagged in ${zero.join(", ")}.` : "";
+}
+
+function shortId(id) { return id.length > 14 ? `${id.slice(0, 8)}…${id.slice(-4)}` : id; }
+
+let alertsSeq = 0;
+async function loadAlerts() {
+  const minp = Number($("minp").value);
+  const seq = ++alertsSeq;  // ignore responses that arrive after a newer slider value
+  try {
+    const rows = await getJSON(`/alerts?min_probability=${minp}&limit=50`);
+    if (seq !== alertsSeq) return;
+    const body = $("alerts");
+    if (!rows.length) {
+      body.replaceChildren(el("tr", {}, el("td", { colspan: "5", class: "muted", text: `No transactions at probability ≥ ${minp.toFixed(2)}.` })));
+      return;
+    }
+    body.replaceChildren(...rows.map((r) => {
+      const tr = el("tr", { title: r.transaction_id },
+        el("td", { class: "mono", text: shortId(r.transaction_id) }),
+        el("td", {}, el("span", { class: "badge", text: r.type })),
+        el("td", { class: "r num", text: money.format(r.amount) }),
+        el("td", { class: "r num hide-sm", text: String(r.step) }),
+        el("td", { class: "r" }, el("div", { class: "prob" },
+          el("div", { class: "track" }, el("div", { class: "fill", style: { width: `${100 * r.fraud_probability}%` } })),
+          el("span", { class: "num", text: r.fraud_probability.toFixed(3) }))));
+      tr.addEventListener("click", () => { $("lookup-id").value = r.transaction_id; lookup(r.transaction_id); });
+      return tr;
+    }));
+  } catch (err) {
+    if (seq === alertsSeq) $("alerts").replaceChildren(el("tr", {}, el("td", { colspan: "5", class: "muted", text: err.message })));
+  }
+}
+
+async function lookup(id) {
+  const out = $("lookup-result");
+  if (!id) { out.replaceChildren(); return; }
+  out.replaceChildren(el("span", { class: "muted", text: "Checking…" }));
+  try {
+    const t = await getJSON(`/transactions/${encodeURIComponent(id)}`);
+    const fraud = t.fraud_prediction === 1;
+    out.replaceChildren(
+      el("div", { class: `verdict ${fraud ? "fraud" : "ok"}`, style: { marginBottom: "12px" },
+        text: fraud ? "✕ Flagged as fraud" : "✓ Looks legitimate" }),
+      el("dl", {},
+        el("dt", { text: "Probability" }), el("dd", { class: "num", text: `${t.fraud_probability.toFixed(3)} (threshold ${t.model_threshold})` }),
+        el("dt", { text: "Type" }), el("dd", { text: t.type }),
+        el("dt", { text: "Amount" }), el("dd", { class: "num", text: money.format(t.amount) }),
+        el("dt", { text: "Hour" }), el("dd", { class: "num", text: String(t.step) }),
+        el("dt", { text: "ID" }), el("dd", { class: "mono", text: t.transaction_id })));
+  } catch (err) {
+    out.replaceChildren(el("span", { class: "muted", text: err.status === 404 ? "Transaction not found." : err.message }));
+  }
+}
+
+let debounce;
+$("minp").addEventListener("input", (e) => {
+  $("minp-out").textContent = Number(e.target.value).toFixed(2);
+  clearTimeout(debounce);
+  debounce = setTimeout(loadAlerts, 200);
+});
+$("lookup-form").addEventListener("submit", (e) => { e.preventDefault(); lookup($("lookup-id").value.trim()); });
+
+async function init() {
+  try {
+    await getJSON("/health");
+  } catch (err) {
+    setStatus("critical", err.status === 0 ? "API offline" : "Database offline");
+    showBanner(err.status === 0 ? err.message
+      : `Cannot reach the database: ${err.message}. Start it with "docker compose up -d".`);
+    return;
+  }
+  try {
+    const stats = await getJSON("/stats");
+    $("link-airflow").href = stats.airflow_url;
+    const run = stats.runs[0];
+    setStatus(run && run.status === "failed" ? "critical" : "good",
+      run ? `Live · updated ${timeOf(run.finished_at || run.started_at)}` : "Live");
+    renderPipeline(stats); renderKpis(stats); renderBars(stats);
+    loadAlerts();
+  } catch (err) {
+    setStatus("warning", "No data yet");
+    showBanner(err.status === 503 ? "No predictions loaded yet. Run the fraud_detection_pipeline DAG in Airflow first." : err.message);
+  }
+}
+init();
+</script>
+</body>
+</html>
