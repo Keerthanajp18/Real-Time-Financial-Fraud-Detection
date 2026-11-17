@@ -4,226 +4,347 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Fraud Detection Platform</title>
-<!-- Member 5 demo dashboard. Self-contained: no CDN, works offline. Data from /stats, /alerts, /transactions. -->
+<!-- Self-contained dashboard: no CDN, works offline. Data from /stats, /alerts and /transactions. -->
 <style>
-  /* Minimal palette: neutral ink and surfaces, one violet accent for data, red only for fraud */
+  /* Theme: white page, black for text and high risk, yellow for "needs attention", green for "good" */
   :root {
-    --bg: #f7f7f5; --card: #ffffff; --border: #e9e8e4; --track: #f0efeb;
-    --text: #18181b; --text-2: #52525b; --text-3: #71717a;
-    --accent: #6250d6; --accent-ink: #ffffff; --accent-tint: #f1effd;
-    --good: #0ca30c; --warning: #b77f00; --critical: #d03b3b;
+    --page: #ffffff; --soft: #f6f7f4; --card: #ffffff; --border: #e3e5df; --track: #eceee8;
+    --black: #111111; --text: #111111; --text-2: #3f4247; --text-3: #676b72;
+    --accent: #15803d; --accent-ink: #ffffff; --accent-tint: #e8f6ec; --accent-line: #b7e1c4;
+    --good: #15803d; --good-dot: #22c55e; --good-tint: #e8f6ec;
+    --yellow: #facc15; --yellow-strong: #eab308; --yellow-ink: #5c3d00; --yellow-tint: #fef7d1;
+    --shadow: 0 1px 2px rgba(17, 17, 17, .04), 0 2px 10px rgba(17, 17, 17, .05);
     color-scheme: light;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: #0c0c0d; --card: #141416; --border: #26262a; --track: #1f1f23;
-      --text: #f4f4f5; --text-2: #b4b4bb; --text-3: #8b8b94;
-      --accent: #9085e9; --accent-ink: #0c0c0d; --accent-tint: #1d1a33;
-      --good: #0ca30c; --warning: #fab219; --critical: #e66767;
-      color-scheme: dark;
-    }
   }
   * { box-sizing: border-box; }
   body {
-    margin: 0; background: var(--bg); color: var(--text);
+    margin: 0; background: var(--page); color: var(--text);
     font: 15px/1.55 system-ui, -apple-system, "Segoe UI Variable Text", "Segoe UI", Roboto, sans-serif;
     -webkit-font-smoothing: antialiased;
   }
-  .wrap { max-width: 1160px; margin: 0 auto; padding: 40px 24px 56px; }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 28px 24px 56px; }
   .num { font-variant-numeric: tabular-nums; }
   .mono { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: 12.5px; }
   .muted { color: var(--text-3); }
-  h1 { font-size: 26px; font-weight: 600; margin: 0; letter-spacing: -.02em; }
-  h2 { font-size: 12px; font-weight: 600; margin: 0 0 18px; color: var(--text-3);
-       text-transform: uppercase; letter-spacing: .08em; }
+  h1 { font-size: 28px; font-weight: 650; margin: 0; letter-spacing: -.02em; }
+  h2 { font-size: 17px; font-weight: 600; margin: 0; }
+  .card-sub { font-size: 13.5px; color: var(--text-3); margin: 3px 0 18px; }
   a { color: var(--accent); text-decoration: none; }
   a:hover { text-decoration: underline; text-underline-offset: 3px; }
 
-  header { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; margin-bottom: 28px; }
-  .eyebrow { font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); margin-bottom: 6px; }
-  header p { margin: 4px 0 0; color: var(--text-2); font-size: 14px; }
-  .pill { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px;
-          border: 1px solid var(--border); background: var(--card); font-size: 13px; color: var(--text-2); }
-  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text-3); flex: none; }
-  .dot.good { background: var(--good); } .dot.critical { background: var(--critical); } .dot.warning { background: var(--warning); }
+  button, select, input { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .btn { padding: 9px 16px; border-radius: 10px; border: 1px solid var(--border); background: var(--card);
+         font-size: 14px; font-weight: 550; }
+  .btn:hover { background: var(--soft); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  .btn.primary:hover { filter: brightness(1.1); background: var(--accent); }
+  .btn.yellow { background: var(--yellow); border-color: var(--yellow); color: var(--black); }
+  .btn.yellow:hover { filter: brightness(1.05); background: var(--yellow); }
+  .btn.small { padding: 5px 11px; font-size: 13px; border-radius: 8px; }
+  .link-btn { border: 0; background: none; padding: 0; color: var(--accent); font-size: 12.5px; font-weight: 550; }
 
-  .card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 24px; }
-  section { margin-bottom: 16px; }
+  /* Header: black band across the top */
+  .topbar { background: var(--black); color: #ffffff; border-bottom: 4px solid var(--yellow); }
+  header { max-width: 1180px; margin: 0 auto; padding: 26px 24px 24px; display: flex; justify-content: space-between;
+           align-items: flex-start; gap: 16px 24px; flex-wrap: wrap; }
+  .brand { display: flex; gap: 14px; align-items: flex-start; }
+  .logo { width: 42px; height: 42px; flex: none; border-radius: 10px; background: var(--yellow); display: grid; place-items: center; }
+  .logo svg { width: 24px; height: 24px; }
+  .eyebrow { font-size: 12px; font-weight: 650; letter-spacing: .08em; text-transform: uppercase; color: var(--yellow); margin-bottom: 4px; }
+  header h1 { color: #ffffff; }
+  header p { margin: 6px 0 0; color: #c9ccd1; font-size: 15px; max-width: 640px; }
+  .header-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .pill { display: inline-flex; align-items: center; gap: 8px; padding: 7px 13px; border-radius: 999px;
+          border: 1px solid #34363a; background: #1c1d1f; font-size: 13px; color: #e6e7ea; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: #8b8f96; flex: none; }
+  .dot.good { background: var(--good-dot); box-shadow: 0 0 0 3px rgba(34, 197, 94, .25); }
+  .dot.critical { background: #ffffff; } .dot.warning { background: var(--yellow); }
 
-  /* Pipeline strip: thin rail, small status dots, numbered stages */
+  .banner { display: none; margin-bottom: 18px; padding: 14px 18px; border-radius: 12px; font-size: 14px;
+            border: 1px solid #f3dc7a; border-left: 5px solid var(--black); color: var(--black); background: var(--yellow-tint); }
+  .banner.show { display: block; }
+  .banner b { display: block; margin-bottom: 2px; }
+
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 22px 24px; box-shadow: var(--shadow); }
+  section { margin-bottom: 18px; }
+
+  /* Pipeline strip */
   .pipeline { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); }
   .stage { position: relative; padding: 0 6px; text-align: center; }
   .stage .idx { font-size: 11px; color: var(--text-3); margin-bottom: 8px; }
   .stage:not(:last-child)::after {
-    content: ""; position: absolute; top: 31px; left: calc(50% + 10px); right: calc(-50% + 10px);
-    height: 1px; background: var(--border);
+    content: ""; position: absolute; top: 32px; left: calc(50% + 12px); right: calc(-50% + 12px);
+    height: 2px; background: var(--track); border-radius: 1px;
   }
-  .stage .node { width: 9px; height: 9px; margin: 0 auto 14px; border-radius: 50%; background: var(--text-3);
+  .stage .node { width: 12px; height: 12px; margin: 0 auto 14px; border-radius: 50%; background: var(--text-3);
                  box-shadow: 0 0 0 4px var(--card); }
-  .stage .node.good { background: var(--good); } .stage .node.critical { background: var(--critical); }
-  .stage .node.warning { background: var(--warning); }
+  .stage .node.good { background: var(--good-dot); } .stage .node.critical { background: var(--black); }
+  .stage .node.warning { background: var(--yellow); }
+  .pipeline.ok .stage:not(:last-child)::after { background: var(--accent-line); }
   .stage .name { font-weight: 600; font-size: 14px; }
   .stage .tech { font-size: 12px; color: var(--text-2); }
-  .stage .owner { font-size: 11px; color: var(--text-3); margin-top: 2px; }
-  .stage .count { display: inline-block; margin-top: 8px; padding: 1px 8px; border-radius: 999px; font-size: 11.5px;
-                  font-weight: 600; color: var(--accent); background: var(--accent-tint); }
-  .runline { margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--border); font-size: 13px; color: var(--text-2);
+  .stage .owner { font-size: 11.5px; color: var(--text-3); margin-top: 2px; }
+  .stage .count { display: inline-block; margin-top: 8px; padding: 1px 9px; border-radius: 999px; font-size: 11.5px;
+                  font-weight: 650; color: var(--yellow-ink); background: var(--yellow-tint); border: 1px solid #f3dc7a; }
+  .runline { margin-top: 20px; padding-top: 14px; border-top: 1px solid var(--border); font-size: 13px; color: var(--text-2);
              display: flex; gap: 6px 24px; flex-wrap: wrap; overflow-wrap: anywhere; }
   .runline b { color: var(--text); font-weight: 600; }
-  .runerror { color: var(--critical); }
+  .runline b.ok { color: var(--good); }
+  .runerror { color: var(--black); font-weight: 600; }
 
-  /* Headline numbers: one card, four columns split by hairlines */
-  .kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); padding: 0; }
-  .kpi { padding: 22px 24px; }
-  .kpi + .kpi { border-left: 1px solid var(--border); }
-  .kpi .label { font-size: 13px; color: var(--text-2); }
-  .kpi .value { font-size: 34px; font-weight: 500; letter-spacing: -.03em; line-height: 1.15; margin-top: 6px; }
-  .kpi .sub { font-size: 12px; color: var(--text-3); margin-top: 4px; }
+  /* Headline numbers: the colour strip on top says what kind of number it is */
+  .kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+  .kpi { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 18px 20px; box-shadow: var(--shadow);
+         border-top: 5px solid var(--black); }
+  .kpi.tone-yellow { border-top-color: var(--yellow); }
+  .kpi.tone-green { border-top-color: var(--good-dot); }
+  .kpi .label { font-size: 13.5px; color: var(--text-2); font-weight: 550; }
+  .kpi .value { font-size: 32px; font-weight: 600; letter-spacing: -.02em; line-height: 1.2; margin-top: 4px; }
+  .kpi .sub { font-size: 12.5px; color: var(--text-3); margin-top: 4px; }
 
-  .two { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 16px; }
+  .two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 18px; }
 
-  /* Flagged-by-type bars: single series, one hue, rounded data-end anchored at the baseline */
+  /* Flagged-by-type bars */
   .bars { display: grid; gap: 14px; }
-  .bar-row { display: grid; grid-template-columns: 88px 1fr 56px; align-items: center; gap: 14px; cursor: default; }
-  .bar-row .type { font-size: 13px; color: var(--text-2); }
+  .bar-row { display: grid; grid-template-columns: 96px 1fr 64px; align-items: center; gap: 14px; }
+  .bar-row .type { font-size: 13.5px; color: var(--text-2); }
   .bar-row .track { height: 10px; position: relative; background: var(--track); border-radius: 5px; }
-  .bar-row .fill { position: absolute; inset: 0 auto 0 0; background: var(--accent); border-radius: 5px; min-width: 3px; }
-  .bar-row .val { font-size: 13px; text-align: right; }
-  .bar-row:hover .fill, .bar-row:focus .fill { filter: brightness(1.12); }
-  .bar-row:focus { outline: none; } .bar-row:focus-visible .type { color: var(--accent); }
-  .axis-note { font-size: 12px; color: var(--text-3); margin-top: 18px; }
+  .bar-row .fill { position: absolute; inset: 0 auto 0 0; background: var(--yellow-strong); border-radius: 5px; min-width: 3px; }
+  .bar-row .val { font-size: 13.5px; text-align: right; font-weight: 600; }
+  .bar-row:hover .fill, .bar-row:focus .fill { background: var(--black); }
+  .axis-note { font-size: 12.5px; color: var(--text-3); margin-top: 16px; }
 
   /* Lookup */
   .lookup form { display: flex; gap: 8px; }
   input[type=text] { flex: 1; min-width: 0; padding: 10px 14px; border-radius: 10px; border: 1px solid var(--border);
-                     background: var(--bg); color: var(--text); font: inherit; font-size: 14px; }
-  input[type=text]::placeholder { color: var(--text-3); }
-  input[type=text]:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-tint); }
-  button:focus-visible, input[type=range]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-  button { padding: 10px 18px; border-radius: 10px; border: 0; background: var(--accent); color: var(--accent-ink); font: inherit;
-           font-size: 14px; font-weight: 600; cursor: pointer; }
-  button:hover { filter: brightness(1.08); }
-  .result { margin-top: 18px; font-size: 14px; }
-  .result dl { display: grid; grid-template-columns: auto 1fr; gap: 8px 18px; margin: 0; }
+                     background: var(--soft); font-size: 14px; }
+  input[type=text]:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-tint); background: var(--card); }
+  .result { margin-top: 16px; font-size: 14px; }
+  .result-empty { padding: 18px; border: 1px dashed var(--border); border-radius: 12px; color: var(--text-3); font-size: 13.5px; text-align: center; }
+  .verdict { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+  .verdict .score { font-size: 30px; font-weight: 650; letter-spacing: -.02em; }
+  .explain { color: var(--text-2); margin: 0 0 12px; }
+  .meter { position: relative; height: 10px; border-radius: 5px; background: var(--track); margin: 6px 0 4px; }
+  .meter .fill { position: absolute; inset: 0 auto 0 0; border-radius: 5px; }
+  .meter .fill.high { background: var(--black); } .meter .fill.medium { background: var(--yellow-strong); }
+  .meter .fill.low { background: var(--good-dot); }
+  .meter .cut { position: absolute; top: -4px; bottom: -4px; width: 2px; background: var(--text); }
+  .meter-labels { display: flex; justify-content: space-between; font-size: 11.5px; color: var(--text-3); margin-bottom: 14px; }
+  .result dl { display: grid; grid-template-columns: auto 1fr; gap: 7px 18px; margin: 0; }
   .result dt { color: var(--text-3); } .result dd { margin: 0; overflow-wrap: anywhere; }
-  .verdict { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; }
-  .verdict.fraud { color: var(--critical); } .verdict.ok { color: var(--good); }
-  .hint { font-size: 13px; color: var(--text-3); margin-top: 14px; }
 
-  /* Alerts table */
-  .table-head { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; }
-  .table-head h2 { margin: 0; }
-  .slider { display: flex; align-items: center; gap: 12px; font-size: 13px; color: var(--text-2); }
-  .slider input { width: 180px; accent-color: var(--accent); }
-  .slider output { min-width: 36px; font-weight: 600; color: var(--text); }
-  .scroll { max-height: 460px; overflow: auto; margin: 0 -24px -24px; }
+  /* Risk badges: icon + word, never colour alone */
+  .risk { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px;
+          font-size: 12.5px; font-weight: 600; white-space: nowrap; }
+  .risk svg { width: 11px; height: 11px; }
+  .risk.high { background: var(--black); color: #ffffff; } .risk.high svg { fill: var(--yellow); }
+  .risk.medium { background: var(--yellow); color: var(--black); } .risk.medium svg { fill: var(--black); }
+  .risk.low { background: var(--good-tint); color: var(--good); } .risk.low svg { fill: var(--good); }
+
+  /* Alerts */
+  .table-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+  .controls { display: flex; align-items: center; gap: 10px 16px; flex-wrap: wrap; margin-bottom: 14px; }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .chip { padding: 6px 12px; border-radius: 999px; border: 1px solid var(--border); background: var(--card); font-size: 13px; color: var(--text-2); }
+  .chip:hover { background: var(--soft); }
+  .chip.active { background: var(--black); border-color: var(--black); color: #ffffff; font-weight: 600; }
+  .slider { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--text-2); }
+  .slider input { width: 150px; accent-color: var(--accent); }
+  .slider output { min-width: 40px; font-weight: 600; color: var(--text); }
+  select { padding: 7px 10px; border-radius: 9px; border: 1px solid var(--border); background: var(--card); font-size: 13px; }
+  .spacer { flex: 1; }
+
+  .scroll { max-height: 520px; overflow: auto; margin: 0 -24px; border-top: 1px solid var(--border); }
   table { width: 100%; border-collapse: collapse; font-size: 14px; }
-  th { position: sticky; top: 0; background: var(--card); text-align: left; font-weight: 500; font-size: 12px;
-       color: var(--text-3); padding: 10px 24px; border-bottom: 1px solid var(--border); }
-  td { padding: 11px 24px; border-bottom: 1px solid var(--border); }
-  tbody tr:last-child td { border-bottom: 0; }
+  th { position: sticky; top: 0; z-index: 1; background: var(--soft); text-align: left; font-weight: 600; font-size: 12px;
+       color: var(--text-3); padding: 10px 24px; border-bottom: 1px solid var(--border); text-transform: uppercase; letter-spacing: .04em; }
+  td { padding: 11px 24px; border-bottom: 1px solid var(--border); vertical-align: middle; }
   tbody tr { cursor: pointer; transition: background .12s; }
-  tbody tr:hover { background: var(--accent-tint); }
+  tbody tr:hover { background: var(--soft); }
+  tbody tr.selected { background: var(--yellow-tint); box-shadow: inset 4px 0 0 var(--black); }
   th.r, td.r { text-align: right; }
-  .prob { display: flex; align-items: center; gap: 12px; justify-content: flex-end; }
-  .prob .track { width: 88px; height: 4px; border-radius: 2px; background: var(--track); overflow: hidden; }
-  .prob .fill { height: 100%; background: var(--accent); border-radius: 2px; }
-  .badge { font-size: 12px; color: var(--text-2); letter-spacing: .02em; }
+  .prob { display: flex; align-items: center; gap: 10px; justify-content: flex-end; }
+  .prob .track { width: 80px; height: 6px; border-radius: 3px; background: var(--track); overflow: hidden; }
+  .prob .fill { height: 100%; border-radius: 3px; }
+  .prob .fill.high { background: var(--black); } .prob .fill.medium { background: var(--yellow-strong); }
+  .prob .fill.low { background: var(--good-dot); }
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; align-items: center; font-size: 12.5px; color: var(--text-3);
+            margin-bottom: 14px; }
+  .legend::before { content: "Risk level:"; font-weight: 600; color: var(--text-2); }
+  .prob span { min-width: 46px; text-align: right; font-weight: 550; }
+  .id-cell { display: flex; align-items: center; gap: 8px; }
+  .empty-row td { cursor: default; text-align: center; color: var(--text-3); padding: 36px 24px; }
+  .table-foot { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;
+                padding-top: 14px; font-size: 13px; color: var(--text-3); }
 
-  .banner { display: none; margin-bottom: 16px; padding: 12px 16px; border-radius: 12px; font-size: 14px;
-            border: 1px solid var(--critical); color: var(--critical); background: var(--card); }
-  .banner.show { display: block; }
-  footer { display: flex; gap: 22px; flex-wrap: wrap; font-size: 13px; color: var(--text-3); margin-top: 28px; }
+  /* Help */
+  details.help { margin-top: 4px; }
+  details.help summary { cursor: pointer; font-weight: 600; font-size: 15px; list-style: none; }
+  details.help summary::-webkit-details-marker { display: none; }
+  details.help summary::after { content: " +"; color: var(--text-3); }
+  details.help[open] summary::after { content: " −"; }
+  .help dl { display: grid; grid-template-columns: max-content 1fr; gap: 8px 22px; margin: 16px 0 0; font-size: 14px; }
+  .help dt { font-weight: 600; } .help dd { margin: 0; color: var(--text-2); }
+
+  footer { display: flex; gap: 22px; flex-wrap: wrap; font-size: 13px; color: var(--text-3); margin-top: 24px; }
 
   #tip { position: fixed; pointer-events: none; z-index: 10; padding: 8px 10px; border-radius: 8px; font-size: 12px;
          background: var(--text); color: var(--card); opacity: 0; transition: opacity .1s; max-width: 260px; }
   #tip.show { opacity: 1; }
+  .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); padding: 9px 16px; border-radius: 10px;
+           background: var(--text); color: var(--card); font-size: 13px; opacity: 0; transition: opacity .15s; pointer-events: none; }
+  .toast.show { opacity: 1; }
 
-  @media (max-width: 900px) {
-    .wrap { padding: 24px 16px 40px; }
+  @media (max-width: 960px) {
+    .wrap { padding: 22px 16px 40px; }
     .pipeline { grid-template-columns: repeat(4, minmax(0, 1fr)); row-gap: 24px; }
     .stage:nth-child(4)::after { display: none; }
     .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    .kpi:nth-child(3) { border-left: 0; }
-    .kpi:nth-child(n+3) { border-top: 1px solid var(--border); }
     .two { grid-template-columns: minmax(0, 1fr); }
+    .scroll { margin: 0 -24px; }
   }
-  @media (max-width: 520px) {
+  @media (max-width: 560px) {
     .pipeline { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .stage:nth-child(2n)::after { display: none; }
-    .kpi .value { font-size: 26px; }
+    .kpis { grid-template-columns: minmax(0, 1fr); }
     .hide-sm { display: none; }
+    th, td { padding-left: 14px; padding-right: 14px; }
   }
 </style>
 </head>
 <body>
-<div class="wrap">
+<div class="topbar">
   <header>
-    <div>
-      <div class="eyebrow">Fraud monitoring</div>
-      <h1>Fraud Detection Platform</h1>
-      <p>Real-time pipeline on the PaySim mobile-money dataset</p>
+    <div class="brand">
+      <div class="logo" aria-hidden="true">
+        <svg viewBox="0 0 24 24"><path d="M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5l-8-3Z" fill="#111111"/>
+          <path d="m8.5 12 2.5 2.5 4.5-5" fill="none" stroke="#facc15" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <div>
+        <div class="eyebrow">Fraud monitoring</div>
+        <h1>Fraud Detection Platform</h1>
+        <p>Every PaySim mobile-money payment is checked by a machine-learning model. Payments that look like fraud are listed below so an analyst can review them.</p>
+      </div>
     </div>
-    <span class="pill" id="status"><span class="dot"></span><span>Connecting…</span></span>
+    <div class="header-right">
+      <span class="pill" id="status"><span class="dot"></span><span>Connecting…</span></span>
+      <button class="btn yellow" id="refresh" type="button">Refresh</button>
+    </div>
   </header>
+</div>
+
+<div class="wrap">
 
   <div class="banner" id="banner" role="alert"></div>
 
   <section class="card">
-    <h2>Pipeline</h2>
+    <h2>How the data gets here</h2>
+    <p class="card-sub">Each stage feeds the next. Airflow runs the whole chain every 6 hours.</p>
     <div class="pipeline" id="pipeline"></div>
     <div class="runline" id="runline"></div>
   </section>
 
-  <section class="card kpis" id="kpis"></section>
+  <section class="kpis" id="kpis" aria-live="polite"></section>
 
   <section class="two">
     <div class="card">
-      <h2>Flagged by transaction type</h2>
+      <h2>Where the alerts are</h2>
+      <p class="card-sub">Flagged payments by type. Hover a bar for details.</p>
       <div class="bars" id="bars"></div>
       <div class="axis-note" id="bars-note"></div>
     </div>
     <div class="card lookup">
-      <h2>Look up a transaction</h2>
+      <h2>Check a payment</h2>
+      <p class="card-sub">Paste a transaction ID, or click any row in the alerts table.</p>
       <form id="lookup-form">
-        <label for="lookup-id" class="hide-sm" style="position:absolute;left:-9999px">Transaction ID</label>
+        <label for="lookup-id" style="position:absolute;left:-9999px">Transaction ID</label>
         <input type="text" id="lookup-id" placeholder="Transaction ID" autocomplete="off" spellcheck="false">
-        <button type="submit">Check</button>
+        <button class="btn primary" type="submit">Check</button>
       </form>
-      <div class="result" id="lookup-result"></div>
-      <div class="hint">Tip: click any row in the alerts table to look it up.</div>
+      <div class="result" id="lookup-result" aria-live="polite">
+        <div class="result-empty">The score, verdict and details of the payment will show here.</div>
+      </div>
     </div>
   </section>
 
   <section class="card">
     <div class="table-head">
-      <h2>Fraud alerts</h2>
-      <label class="slider">Min probability
+      <div>
+        <h2>Payments flagged for review</h2>
+        <p class="card-sub" id="alerts-sub">Riskiest first. Click a row to see its details.</p>
+      </div>
+      <button class="btn small" id="export" type="button">Download CSV</button>
+    </div>
+    <div class="controls">
+      <div class="chips" id="chips" role="group" aria-label="Minimum fraud score">
+        <button class="chip" type="button" data-p="model">All flagged</button>
+        <button class="chip active" type="button" data-p="0.9">High risk (90%+)</button>
+        <button class="chip" type="button" data-p="0.99">Very high (99%+)</button>
+      </div>
+      <label class="slider">Min score
         <input type="range" id="minp" min="0.4" max="0.99" step="0.01" value="0.9">
-        <output id="minp-out" class="num">0.90</output>
+        <output id="minp-out" class="num">90%</output>
+      </label>
+      <span class="spacer"></span>
+      <label class="slider">Type
+        <select id="type-filter"><option value="">All types</option></select>
       </label>
     </div>
+    <div class="legend" id="legend" aria-label="Risk levels"></div>
     <div class="scroll">
       <table>
-        <thead><tr><th>Transaction</th><th>Type</th><th class="r">Amount</th><th class="r hide-sm">Hour</th><th class="r">Fraud probability</th></tr></thead>
+        <thead><tr>
+          <th>Risk</th><th>Payment type</th><th class="r">Amount</th><th class="r hide-sm">Hour</th>
+          <th class="r">Fraud score</th><th class="hide-sm">Transaction ID</th>
+        </tr></thead>
         <tbody id="alerts"></tbody>
       </table>
     </div>
+    <div class="table-foot">
+      <span id="alerts-count"></span>
+      <button class="btn small" id="more" type="button">Show more</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <details class="help">
+      <summary>How to read this page</summary>
+      <dl>
+        <dt>Fraud score</dt><dd>The model's estimate, from 0% to 100%, that a payment is fraud.</dd>
+        <dt>Cut-off</dt><dd>Payments scoring at or above the model's cut-off (shown on each payment) are flagged. It was chosen to balance missed fraud against false alarms.</dd>
+        <dt>Risk level</dt><dd><b>High</b>: score of 90% or more. <b>Medium</b>: flagged, but below 90%. <b>Low</b>: below the cut-off, not flagged.</dd>
+        <dt>Fraud caught</dt><dd>Out of all real fraud in the held-out test data, the share the model flagged (recall).</dd>
+        <dt>Alerts that are real</dt><dd>Out of all flagged payments in the test data, the share that really were fraud (precision).</dd>
+        <dt>Hour</dt><dd>The simulation hour of the payment. PaySim covers 743 hours, about 31 days.</dd>
+        <dt>Amounts</dt><dd>In PaySim's currency units, as in the source data.</dd>
+      </dl>
+    </details>
   </section>
 
   <footer>
     <a id="link-airflow" href="http://localhost:8081" target="_blank" rel="noopener">Airflow ↗</a>
     <a href="http://localhost:8080" target="_blank" rel="noopener">Kafka UI ↗</a>
     <a href="/docs" target="_blank" rel="noopener">API docs ↗</a>
-    <span>Highest-probability alerts first · top 50 shown</span>
+    <span id="updated"></span>
   </footer>
 </div>
 <div id="tip" role="tooltip"></div>
+<div class="toast" id="toast" role="status"></div>
 
 <script>
 const fmt = new Intl.NumberFormat("en-US");
 const money = new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const $ = (id) => document.getElementById(id);
+const pct = (x, d = 1) => `${(x * 100).toFixed(d)}%`;
+
+const HIGH_RISK = 0.9;
+const PAGE = 50;
+const TYPE_NAMES = { TRANSFER: "Transfer", CASH_OUT: "Cash-out", PAYMENT: "Payment", CASH_IN: "Cash-in", DEBIT: "Debit" };
+const typeName = (t) => TYPE_NAMES[t] || t;
+
+const state = { threshold: 0.4, minp: 0.9, limit: PAGE, rows: [], selected: null };
 
 // Build DOM with textContent only: transaction IDs and error text come from the database
 function el(tag, props = {}, ...children) {
@@ -232,10 +353,34 @@ function el(tag, props = {}, ...children) {
     if (k === "class") node.className = v;
     else if (k === "text") node.textContent = v;
     else if (k === "style") Object.assign(node.style, v);
+    else if (k.startsWith("on")) node.addEventListener(k.slice(2), v);
     else node.setAttribute(k, v);
   }
   for (const c of children) if (c != null) node.append(c);
   return node;
+}
+
+function icon(kind) {
+  const d = { high: "M12 3 2 21h20L12 3Z", medium: "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18Z", low: "M4 12.5 9.5 18 20 6.5l-2-2-8.5 9.5L6 10.5l-2 2Z" }[kind];
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("viewBox", "0 0 24 24"); svg.setAttribute("aria-hidden", "true");
+  const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  path.setAttribute("d", d); svg.append(path);
+  return svg;
+}
+
+function riskOf(p) { return p >= HIGH_RISK ? "high" : p >= state.threshold ? "medium" : "low"; }
+function riskBadge(p) {
+  const kind = riskOf(p);
+  return el("span", { class: `risk ${kind}` }, icon(kind), { high: "High", medium: "Medium", low: "Low" }[kind]);
+}
+
+function renderLegend() {
+  const item = (kind, label, text) => el("span", {}, el("span", { class: `risk ${kind}` }, icon(kind), label), ` ${text}`);
+  $("legend").replaceChildren(
+    item("high", "High", `${pct(HIGH_RISK, 0)}+`),
+    item("medium", "Medium", `${pct(state.threshold, 0)}–${pct(HIGH_RISK, 0)}`),
+    item("low", "Low", `below ${pct(state.threshold, 0)}`));
 }
 
 async function getJSON(url) {
@@ -245,7 +390,7 @@ async function getJSON(url) {
   } catch {
     // Network failure: the API itself is down, not the database behind it
     setStatus("critical", "API offline");
-    throw Object.assign(new Error("API unreachable. Start it with \"docker compose up -d\"."), { status: 0 });
+    throw Object.assign(new Error("The API is not reachable."), { status: 0 });
   }
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw Object.assign(new Error(body.detail || `HTTP ${res.status}`), { status: res.status });
@@ -255,7 +400,19 @@ async function getJSON(url) {
 function setStatus(kind, text) {
   $("status").replaceChildren(el("span", { class: `dot ${kind}` }), el("span", { text }));
 }
-function showBanner(text) { $("banner").textContent = text; $("banner").classList.toggle("show", !!text); }
+function showBanner(title, text) {
+  $("banner").replaceChildren(...(title ? [el("b", { text: title }), el("span", { text })] : []));
+  $("banner").classList.toggle("show", !!title);
+}
+let toastTimer;
+function toast(text) {
+  $("toast").textContent = text; $("toast").classList.add("show");
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => $("toast").classList.remove("show"), 1600);
+}
+async function copyId(id) {
+  try { await navigator.clipboard.writeText(id); toast("Transaction ID copied"); }
+  catch { toast("Copy failed. Select the ID and copy it by hand."); }
+}
 
 function duration(a, b) {
   if (!a || !b) return null;
@@ -266,22 +423,22 @@ function timeOf(iso) {
   return iso ? new Date(iso).toLocaleString([], { dateStyle: "medium", timeStyle: "short" }) : "—";
 }
 
-// One stage per pipeline step, with the team member who owns it
+// One stage per pipeline step, with the team member who built it
 const STAGES = [
-  { name: "PaySim CSV", tech: "Source data", owner: "Dataset" },
-  { name: "Kafka", tech: "Streaming ingest", owner: "Member 1" },
-  { name: "Bronze", tech: "Raw · Spark", owner: "Member 2" },
-  { name: "Silver", tech: "Cleaned", owner: "Member 2" },
-  { name: "Gold", tech: "Features", owner: "Member 2" },
-  { name: "GBT model", tech: "Fraud scoring", owner: "Member 3", key: "model" },
-  { name: "Postgres", tech: "Serving store", owner: "Member 5", key: "rows" },
-  { name: "REST API", tech: "FastAPI", owner: "Member 5" },
+  { name: "PaySim CSV", tech: "Source data", owner: "6.36M payments" },
+  { name: "Kafka", tech: "Streaming ingest", owner: "Anusree" },
+  { name: "Bronze", tech: "Raw copy", owner: "Keerthana" },
+  { name: "Silver", tech: "Cleaned", owner: "Keerthana" },
+  { name: "Gold", tech: "Features", owner: "Keerthana" },
+  { name: "Model", tech: "Fraud scoring", owner: "Jishnu", key: "model" },
+  { name: "Postgres", tech: "Results store", owner: "Sebin", key: "rows" },
+  { name: "Dashboard", tech: "API + this page", owner: "Sebin" },
 ];
 
 function renderPipeline(stats) {
   const run = stats.runs[0];
   const kind = !run ? "" : run.status === "success" ? "good" : run.status === "failed" ? "critical" : "warning";
-  const icon = !run ? "·" : run.status === "success" ? "✓" : run.status === "failed" ? "✕" : "…";
+  $("pipeline").classList.toggle("ok", kind === "good");
   $("pipeline").replaceChildren(...STAGES.map((s, i) => el("div", { class: "stage" },
     el("div", { class: "idx mono", text: String(i + 1).padStart(2, "0") }),
     el("div", { class: `node ${kind}`, "aria-hidden": "true" }),
@@ -293,20 +450,21 @@ function renderPipeline(stats) {
   )));
 
   const line = $("runline");
-  if (!run) { line.replaceChildren(el("span", { text: "No pipeline run recorded yet." })); return; }
-  const label = { success: "Succeeded", failed: "Failed", running: "Running" }[run.status] || run.status;
+  const orchestration = el("span", {}, "Orchestration and data checks by ", el("b", { text: "Khaisekabeer" }), " in ",
+    el("a", { href: stats.airflow_url, target: "_blank", rel: "noopener", text: "Airflow" }));
+  if (!run) { line.replaceChildren(el("span", { text: "No pipeline run has loaded results yet." }), orchestration); return; }
+  const label = { success: "✓ Succeeded", failed: "✕ Failed", running: "… Running" }[run.status] || run.status;
   line.replaceChildren(...[
-    el("span", {}, "Last run ",el("b", { text: `${icon} ${label}` })),
+    el("span", {}, "Last load ", el("b", { class: run.status === "success" ? "ok" : "", text: label })),
     el("span", {}, "Finished ", el("b", { text: timeOf(run.finished_at || run.started_at) })),
-    duration(run.started_at, run.finished_at) ? el("span", {}, "Load took ", el("b", { text: duration(run.started_at, run.finished_at) })) : null,
-    el("span", {}, "Orchestrated by ", el("a", { href: stats.airflow_url, target: "_blank", rel: "noopener", text: "Airflow" }),
-      run.dag_run_id ? el("span", { class: "mono muted", text: ` · ${run.dag_run_id}` }) : null),
+    duration(run.started_at, run.finished_at) ? el("span", {}, "Took ", el("b", { text: duration(run.started_at, run.finished_at) })) : null,
+    orchestration,
     run.error ? el("span", { class: "runerror", text: `Error: ${run.error}` }) : null,
   ].filter(Boolean));
 }
 
-function kpi(label, value, sub) {
-  return el("div", { class: "kpi" },
+function kpi(label, value, sub, tone = "") {
+  return el("div", { class: tone ? `kpi tone-${tone}` : "kpi" },
     el("div", { class: "label", text: label }),
     el("div", { class: "value num", text: value }),
     sub ? el("div", { class: "sub", text: sub }) : null);
@@ -314,15 +472,19 @@ function kpi(label, value, sub) {
 
 function renderKpis(stats) {
   const m = stats.model;
-  const rate = stats.total ? (100 * stats.flagged / stats.total) : 0;
-  $("kpis").replaceChildren(
-    kpi("Transactions scored", fmt.format(stats.total), "Every PaySim transaction"),
-    kpi("Flagged as fraud", fmt.format(stats.flagged), m ? `Probability ≥ ${m.threshold}` : null),
-    kpi("Flag rate", `${rate.toFixed(2)}%`, "Of all transactions"),
-    m ? kpi("Model F1 score", m.test_f1.toFixed(3),
-      `Precision ${m.test_precision.toFixed(3)} · Recall ${m.test_recall.toFixed(3)} · ${m.model_type}`)
-      : kpi("Model", "—", "Metrics file not mounted"),
-  );
+  const rate = stats.total ? stats.flagged / stats.total : 0;
+  const tiles = [
+    kpi("Payments checked", fmt.format(stats.total), "Every payment received a fraud score."),
+    kpi("Flagged as fraud", fmt.format(stats.flagged), `${pct(rate, 2)} of payments scored ${pct(state.threshold, 0)} or more.`, "yellow"),
+  ];
+  if (m) {
+    tiles.push(
+      kpi("Fraud caught", pct(m.test_recall, 0), `About ${Math.round(m.test_recall * 10)} in 10 real fraud cases are flagged.`, "green"),
+      kpi("Alerts that are real", pct(m.test_precision, 0), `About ${Math.round(m.test_precision * 10)} in 10 alerts are real fraud. F1 ${m.test_f1.toFixed(3)}.`, "green"));
+  } else {
+    tiles.push(kpi("Model results", "—", "The model's metrics file is not available."));
+  }
+  $("kpis").replaceChildren(...tiles);
 }
 
 const tip = $("tip");
@@ -336,10 +498,10 @@ function hideTip() { tip.classList.remove("show"); }
 function renderBars(stats) {
   const max = Math.max(1, ...stats.by_type.map((t) => t.flagged));
   $("bars").replaceChildren(...stats.by_type.map((t) => {
-    const rate = t.total ? (100 * t.flagged / t.total) : 0;
-    const text = `${t.type}: ${fmt.format(t.flagged)} flagged of ${fmt.format(t.total)} (${rate.toFixed(2)}%)`;
+    const rate = t.total ? t.flagged / t.total : 0;
+    const text = `${typeName(t.type)}: ${fmt.format(t.flagged)} flagged out of ${fmt.format(t.total)} (${pct(rate, 2)})`;
     const row = el("div", { class: "bar-row", tabindex: "0", "aria-label": text },
-      el("span", { class: "type", text: t.type }),
+      el("span", { class: "type", text: typeName(t.type) }),
       el("div", { class: "track" }, t.flagged ? el("div", { class: "fill", style: { width: `${100 * t.flagged / max}%` } }) : null),
       el("span", { class: "val num", text: fmt.format(t.flagged) }));
     row.addEventListener("mouseenter", (e) => showTip(e, text));
@@ -347,93 +509,181 @@ function renderBars(stats) {
     row.addEventListener("mouseleave", hideTip);
     return row;
   }));
-  const zero = stats.by_type.filter((t) => !t.flagged).map((t) => t.type);
-  $("bars-note").textContent = zero.length ? `No fraud flagged in ${zero.join(", ")}.` : "";
+  const zero = stats.by_type.filter((t) => !t.flagged).map((t) => typeName(t.type));
+  $("bars-note").textContent = zero.length
+    ? `Nothing flagged in ${zero.join(", ")}. In PaySim, fraud only happens in transfers and cash-outs.` : "";
+
+  const select = $("type-filter");
+  const current = select.value;
+  select.replaceChildren(el("option", { value: "", text: "All types" }),
+    ...stats.by_type.filter((t) => t.flagged).map((t) => el("option", { value: t.type, text: typeName(t.type) })));
+  select.value = [...select.options].some((o) => o.value === current) ? current : "";
 }
 
 function shortId(id) { return id.length > 14 ? `${id.slice(0, 8)}…${id.slice(-4)}` : id; }
 
-let alertsSeq = 0;
-async function loadAlerts() {
-  const minp = Number($("minp").value);
-  const seq = ++alertsSeq;  // ignore responses that arrive after a newer slider value
-  try {
-    const rows = await getJSON(`/alerts?min_probability=${minp}&limit=50`);
-    if (seq !== alertsSeq) return;
-    const body = $("alerts");
-    if (!rows.length) {
-      body.replaceChildren(el("tr", {}, el("td", { colspan: "5", class: "muted", text: `No transactions at probability ≥ ${minp.toFixed(2)}.` })));
-      return;
-    }
+function visibleRows() {
+  const type = $("type-filter").value;
+  return type ? state.rows.filter((r) => r.type === type) : state.rows;
+}
+
+function renderAlerts() {
+  const rows = visibleRows();
+  const body = $("alerts");
+  if (!rows.length) {
+    body.replaceChildren(el("tr", { class: "empty-row" }, el("td", { colspan: "6",
+      text: state.rows.length ? "No payments of this type in the loaded list." : `No payments score ${pct(state.minp, 0)} or more.` })));
+  } else {
     body.replaceChildren(...rows.map((r) => {
-      const tr = el("tr", { title: r.transaction_id },
-        el("td", { class: "mono", text: shortId(r.transaction_id) }),
-        el("td", {}, el("span", { class: "badge", text: r.type })),
+      const tr = el("tr", { class: r.transaction_id === state.selected ? "selected" : "", title: "Click to see details" },
+        el("td", {}, riskBadge(r.fraud_probability)),
+        el("td", { text: typeName(r.type) }),
         el("td", { class: "r num", text: money.format(r.amount) }),
         el("td", { class: "r num hide-sm", text: String(r.step) }),
         el("td", { class: "r" }, el("div", { class: "prob" },
-          el("div", { class: "track" }, el("div", { class: "fill", style: { width: `${100 * r.fraud_probability}%` } })),
-          el("span", { class: "num", text: r.fraud_probability.toFixed(3) }))));
-      tr.addEventListener("click", () => { $("lookup-id").value = r.transaction_id; lookup(r.transaction_id); });
+          el("div", { class: "track" }, el("div", { class: `fill ${riskOf(r.fraud_probability)}`, style: { width: `${100 * r.fraud_probability}%` } })),
+          el("span", { class: "num", text: pct(r.fraud_probability) }))),
+        el("td", { class: "hide-sm" }, el("div", { class: "id-cell" },
+          el("span", { class: "mono", title: r.transaction_id, text: shortId(r.transaction_id) }),
+          el("button", { class: "link-btn", type: "button", text: "Copy",
+            onclick: (e) => { e.stopPropagation(); copyId(r.transaction_id); } }))));
+      tr.addEventListener("click", () => select(r.transaction_id));
       return tr;
     }));
-  } catch (err) {
-    if (seq === alertsSeq) $("alerts").replaceChildren(el("tr", {}, el("td", { colspan: "5", class: "muted", text: err.message })));
   }
+  const capped = state.rows.length === state.limit && state.limit < 1000;
+  $("alerts-count").textContent = state.rows.length
+    ? `Showing ${fmt.format(rows.length)} payment${rows.length === 1 ? "" : "s"} scoring ${pct(state.minp, 0)} or more${capped ? ", highest first" : ""}.`
+    : "";
+  $("more").hidden = !capped;
+}
+
+let alertsSeq = 0;
+async function loadAlerts() {
+  const seq = ++alertsSeq;  // ignore responses that arrive after a newer request
+  try {
+    const rows = await getJSON(`/alerts?min_probability=${state.minp}&limit=${state.limit}`);
+    if (seq !== alertsSeq) return;
+    state.rows = rows;
+    renderAlerts();
+  } catch (err) {
+    if (seq !== alertsSeq) return;
+    state.rows = [];
+    $("alerts").replaceChildren(el("tr", { class: "empty-row" }, el("td", { colspan: "6", text: err.message })));
+    $("alerts-count").textContent = ""; $("more").hidden = true;
+  }
+}
+
+function setMinp(value, fromSlider = false) {
+  state.minp = Math.min(Math.max(value, 0.4), 0.99);
+  state.limit = PAGE;
+  if (!fromSlider) $("minp").value = state.minp;
+  $("minp-out").textContent = pct(state.minp, 0);
+  for (const c of $("chips").children) {
+    const p = c.dataset.p === "model" ? state.threshold : Number(c.dataset.p);
+    c.classList.toggle("active", Math.abs(p - state.minp) < 0.001);
+  }
+}
+
+function select(id, scroll = true) {
+  state.selected = id;
+  $("lookup-id").value = id;
+  renderAlerts();
+  lookup(id);
+  if (scroll && window.innerWidth < 960) $("lookup-form").scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 async function lookup(id) {
   const out = $("lookup-result");
-  if (!id) { out.replaceChildren(); return; }
-  out.replaceChildren(el("span", { class: "muted", text: "Checking…" }));
+  if (!id) { out.replaceChildren(el("div", { class: "result-empty", text: "Enter a transaction ID to check it." })); return; }
+  out.replaceChildren(el("div", { class: "result-empty", text: "Checking…" }));
   try {
     const t = await getJSON(`/transactions/${encodeURIComponent(id)}`);
     const fraud = t.fraud_prediction === 1;
+    const p = t.fraud_probability;
     out.replaceChildren(
-      el("div", { class: `verdict ${fraud ? "fraud" : "ok"}`, style: { marginBottom: "12px" },
-        text: fraud ? "✕ Flagged as fraud" : "✓ Looks legitimate" }),
+      el("div", { class: "verdict" }, el("span", { class: "score num", text: pct(p) }), riskBadge(p),
+        el("strong", { text: fraud ? "Flagged as fraud" : "Not flagged" })),
+      el("p", { class: "explain", text: fraud
+        ? `The model rates this payment ${pct(p)} likely to be fraud. That is above its ${pct(t.model_threshold, 0)} cut-off, so it was flagged for review.`
+        : `The model rates this payment ${pct(p)} likely to be fraud. That is below its ${pct(t.model_threshold, 0)} cut-off, so it was not flagged.` }),
+      el("div", { class: "meter", role: "img", "aria-label": `Score ${pct(p)}, cut-off ${pct(t.model_threshold, 0)}` },
+        el("div", { class: `fill ${riskOf(p)}`, style: { width: `${100 * p}%` } }),
+        el("div", { class: "cut", style: { left: `calc(${100 * t.model_threshold}% - 1px)` } })),
+      el("div", { class: "meter-labels" }, el("span", { text: "0%" }), el("span", { text: `cut-off ${pct(t.model_threshold, 0)}` }), el("span", { text: "100%" })),
       el("dl", {},
-        el("dt", { text: "Probability" }), el("dd", { class: "num", text: `${t.fraud_probability.toFixed(3)} (threshold ${t.model_threshold})` }),
-        el("dt", { text: "Type" }), el("dd", { text: t.type }),
+        el("dt", { text: "Payment type" }), el("dd", { text: typeName(t.type) }),
         el("dt", { text: "Amount" }), el("dd", { class: "num", text: money.format(t.amount) }),
         el("dt", { text: "Hour" }), el("dd", { class: "num", text: String(t.step) }),
-        el("dt", { text: "ID" }), el("dd", { class: "mono", text: t.transaction_id })));
+        el("dt", { text: "Transaction ID" }), el("dd", {}, el("span", { class: "mono", text: `${t.transaction_id} ` }),
+          el("button", { class: "link-btn", type: "button", text: "Copy", onclick: () => copyId(t.transaction_id) }))));
   } catch (err) {
-    out.replaceChildren(el("span", { class: "muted", text: err.status === 404 ? "Transaction not found." : err.message }));
+    out.replaceChildren(el("div", { class: "result-empty",
+      text: err.status === 404 ? "No payment with that ID. Check that it was copied in full." : err.message }));
   }
+}
+
+function exportCsv() {
+  const rows = visibleRows();
+  if (!rows.length) { toast("Nothing to download"); return; }
+  const cols = ["transaction_id", "type", "amount", "step", "fraud_probability", "fraud_prediction", "model_threshold"];
+  const csv = [cols.join(","), ...rows.map((r) => cols.map((c) => r[c]).join(","))].join("\n");
+  const a = el("a", { href: URL.createObjectURL(new Blob([csv], { type: "text/csv" })),
+    download: `fraud_alerts_min_${Math.round(state.minp * 100)}.csv` });
+  document.body.append(a); a.click(); a.remove();
+  toast(`Downloaded ${fmt.format(rows.length)} rows`);
 }
 
 let debounce;
 $("minp").addEventListener("input", (e) => {
-  $("minp-out").textContent = Number(e.target.value).toFixed(2);
+  setMinp(Number(e.target.value), true);
   clearTimeout(debounce);
   debounce = setTimeout(loadAlerts, 200);
 });
-$("lookup-form").addEventListener("submit", (e) => { e.preventDefault(); lookup($("lookup-id").value.trim()); });
+$("chips").addEventListener("click", (e) => {
+  const chip = e.target.closest(".chip");
+  if (!chip) return;
+  setMinp(chip.dataset.p === "model" ? state.threshold : Number(chip.dataset.p));
+  loadAlerts();
+});
+$("type-filter").addEventListener("change", renderAlerts);
+$("more").addEventListener("click", () => { state.limit = Math.min(state.limit + PAGE, 1000); loadAlerts(); });
+$("export").addEventListener("click", exportCsv);
+$("lookup-form").addEventListener("submit", (e) => { e.preventDefault(); select($("lookup-id").value.trim()); });
+$("refresh").addEventListener("click", () => refresh(true));
 
-async function init() {
+async function refresh(manual = false) {
   try {
     await getJSON("/health");
   } catch (err) {
     setStatus("critical", err.status === 0 ? "API offline" : "Database offline");
-    showBanner(err.status === 0 ? err.message
-      : `Cannot reach the database: ${err.message}. Start it with "docker compose up -d".`);
+    showBanner(err.status === 0 ? "The dashboard can't reach the API." : "The API can't reach the database.",
+      ' Start the services with "docker compose up -d", wait about 20 seconds, then press Refresh.');
     return;
   }
   try {
     const stats = await getJSON("/stats");
+    if (stats.model && stats.model.threshold != null) state.threshold = stats.model.threshold;
     $("link-airflow").href = stats.airflow_url;
     const run = stats.runs[0];
-    setStatus(run && run.status === "failed" ? "critical" : "good",
-      run ? `Live · updated ${timeOf(run.finished_at || run.started_at)}` : "Live");
-    renderPipeline(stats); renderKpis(stats); renderBars(stats);
-    loadAlerts();
+    setStatus(run && run.status === "failed" ? "critical" : "good", run && run.status === "failed" ? "Last load failed" : "Live");
+    showBanner("");
+    renderPipeline(stats); renderKpis(stats); renderBars(stats); renderLegend();
+    setMinp(state.minp);
+    await loadAlerts();
+    // Open the riskiest payment on first load so the details panel shows a real example
+    if (!state.selected && state.rows.length) select(state.rows[0].transaction_id, false);
+    $("updated").textContent = `Page updated ${new Date().toLocaleTimeString([], { timeStyle: "short" })}`;
+    if (manual) toast("Up to date");
   } catch (err) {
     setStatus("warning", "No data yet");
-    showBanner(err.status === 503 ? "No predictions loaded yet. Run the fraud_detection_pipeline DAG in Airflow first." : err.message);
+    showBanner(err.status === 503 ? "No results have been loaded yet." : "Something went wrong.",
+      err.status === 503 ? " Open Airflow (http://localhost:8081, admin / admin), run the fraud_detection_pipeline DAG, then press Refresh." : ` ${err.message}`);
   }
 }
-init();
+
+refresh();
+setInterval(refresh, 60000);
 </script>
 </body>
 </html>
